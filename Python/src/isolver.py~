@@ -1,0 +1,402 @@
+from init_src import *
+import theano
+import theano.tensor as tensor
+import numpy as np
+import dhmlpe_utils as dutils
+from time import time
+
+import iutils as iu
+from time import gmtime, strftime
+import os
+import iread.myio as mio
+
+class Solver(object):
+    def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
+        self.train_dp = train_dp
+        self.test_dp = test_dp
+        self.net_obj_list = net_obj_list
+        self.parse_params(solver_params)
+    def safe_set_attr(self, solver_params, name, default=None):
+        if name in solver_params:
+            setattr(self, name, solver_params[name])
+        else:
+            setattr(self, name, default)
+    def mergefrom(cls, source_dic, keylist, target_dic):
+        for e in keylist:
+            target_dic[e] = source_dic[e]
+    def parse_params(self, solver_params):
+        required_fields = ['num_epoch', 'save_path', 'testing_freq']
+        self.solver_params = dict()
+        for e in required_fields:
+            self.solver_params[e]= solver_params[e]
+        attributes = ['num_epoch', 'save_path', 'testing_freq']
+        for e in attributes:
+            setattr(self, e, solver_params[e])
+        for e in ['train_error', 'test_error']:
+            self.safe_set_attr(solver_params, e, [])
+        if 'dp_params' in solver_params:
+            self.solver_params['dp_params']= solver_params['dp_params']
+    @classmethod
+    def get_saved_model(cls, saved_folder):
+        allfiles = iu.getfilelist(saved_folder, '\d+@\d+$')
+        def f(s):
+            return [int(x) for x in s.split('@')]
+        allfiles = sorted(allfiles,key=lambda x: f(x))
+        return mio.unpickle(iu.fullfile(saved_folder, allfiles[-1]))
+    @classmethod
+    def clone_weights(cls, layers, saved_layers):
+        l_keys = sorted(layers.keys())
+        l_keys1 = sorted(saved_layers.keys())
+        if len(l_keys) != len(l_keys1) or l_keys != l_keys1:
+            print 'Inconsistent number of layers {} vs {}'.format(len(l_keys),len(l_keys1))
+            raise Exception('Inconsistent number of layers or different components')
+        for l in l_keys:
+            layers[l][2].copy_from_saved_layer(saved_layers[l][2])
+    def train(self):
+        pass
+
+class MMLSSolver(Solver):
+    """
+    The solver for Maxmimum Margin && linesearch
+    """
+    def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
+        Solver.__init__(self, net_obj_list, train_dp, test_dp, solver_params)
+        self.eval_net, self.train_net = net_obj_list[0], net_obj_list[1]
+        self.grad = tensor.grad(self.train_net.costs[0], self.train_net.params)
+        # print theano.pp(self.grad[0])
+        self.grad_func = theano.function(inputs=self.train_net.inputs,
+                                         outputs=self.grad
+        )
+        self.params = self.train_net.params
+        self.test_func = theano.function(inputs=self.train_net.inputs,
+                                          outputs=self.train_net.costs
+        )
+        #  For evaluating the outputs
+        self.eval_model = theano.function(inputs=self.eval_net.inputs,
+                                          outputs=self.eval_net.outputs
+        )
+
+        # For debug usage
+        self.stat = dict()
+        n_train = len(self.train_dp.data_range)
+        self.stat['sample_candidate_counts'] = np.zeros((n_train))  #
+        self.stat['most_violated_counts'] = np.zeros((n_train))
+    def make_margin_func(self, func_name, func_params):
+        """
+        """
+        if func_name == 'rbf':
+            print '    use rbf as margin'
+            sigma = func_params[0]
+            return lambda X: 1 - dutils.calc_RBF_score(X, sigma, group_size=3)
+        elif func_name == 'mpjpe':
+            return lambda X: dutils.calc_mpjpe_from_residuals(X, num_joints=17)
+        else:
+            raise Exception('Unsupported margin type {}'.format(func_name))
+    def parse_params(self, solver_params):
+        Solver.parse_params(self, solver_params)
+        ## For defaults
+        default_dic = {'candidate_mode':'random'}
+        required_field = ['K_candidate', 'max_num', 'K_most_violated', 'candidate_mode', 'margin_func']
+        for e in required_field:
+            if e in solver_params:
+                self.solver_params[e]= solver_params[e]
+            elif e in default_dic:
+                self.solver_params[e]= default_dic[e]
+            else:
+                print e
+                raise Exception('Required field {} missing'.format(e))
+        if 'margin_func' in self.solver_params:
+            self.margin_func = self.make_margin_func(self.solver_params['margin_func']['name'],
+                                                self.solver_params['margin_func']['params'])
+        else:
+            raise Exception('I can not find margin_func')
+            self.margin_func = lambda X:self.calc_margin(X)
+    def print_iteration(self):
+        print 'In iteration {}.{} of {}'.format(self.epoch, self.batchnum,self.num_epoch)
+    def get_best_steps(cost_list):
+        return np.argmin(np.array([x[0] for x in cost_list]))
+    def get_search_steps(self):
+        num_step = int(7)
+        return np.power(10.0,range(-num_step,3))
+    def get_num_batches_done(self, train):
+        dp = self.train_dp if train else self.test_dp
+        r =  dp.get_num_batches_done(self.epoch, self.batchnum)
+        print r ,'========================='
+        return r
+    # def get_updates(self, step_size):
+    #     """
+    #     get the list of updates
+    #     """
+    #     gradients = tensor.grad(self.net_obj.costs[0], self.net_obj.all_params)
+    #     params = self.net_obj.all_params
+    #     return [[p, p - p * step_size * g]  for p,g in zip(params, gradients)]
+    def get_next_batch(self, train=True):
+        dp = self.train_dp if train else self.test_dp
+        return dp.get_next_batch(train)
+    def set_params(self, params, params_on_host):
+        """
+        params is the list of shared variable
+        params_on_host is the list of numpy ndarray 
+        """
+        if len(params)!= len(params_on_host):
+            raise Exception('The length of params {} != length of params_on_host {}'.format(
+                len(params), len(params_on_host)
+            ))
+        for p, p_h in zip(params, params_on_host):
+            p.set_value(p_h)
+    @classmethod
+    def calc_margin(cls, residuals):
+        return dutils.calc_mpjpe_from_residual(residuals, 17)
+    @classmethod
+    def zero_margin(cls, residuals):
+        ndata = residuals.shape[-1]
+        return np.zeros((1,ndata))
+    def gpu_require(self, X):
+        return np.require(X, dtype=theano.config.floatX)
+    def print_layer_outputs(self,alldata):   # FOR DEBUG
+        import iutils as iu
+        t = time()
+        show_layer_name = ['net1_score', 'net1_fc2', 'net2_score', 'net2_fc2', 'net2_mmcost']
+        net= self.train_net
+        outputs = sum([self.train_net.layers[name][2].outputs
+                             for name in show_layer_name],[])
+        func = theano.function(inputs=self.train_net.inputs,
+                               outputs=outputs,
+                               on_unused_input='warn'
+        )
+        res = self.call_func(func,alldata)
+        print '<<<<<<<<<<<<<< evaluation cost %.6f sec.' % (time() - t)
+        for name, r in zip(show_layer_name, res):
+            print '---output layer %s' % name
+            iu.print_common_statistics(r)
+    def analyze_num_sv(self, alldata):
+        """
+        Here will analyze the number of support vector
+        """
+        flayer_name = 'net2_mmcost'
+        func = theano.function(inputs=self.train_net.inputs,
+                               outputs=self.train_net.layers[flayer_name][2].outputs
+        )
+        res = self.call_func(func,alldata)[0]
+        nsv = np.sum(res.flatten()==0)
+        ntot = res.size
+        iu.print_common_statistics(res)
+        print '{}[{}]:\t cost {} #correct {} [{:.2f}%]'.format(res.dtype,
+                                                                 res.shape, res.sum(),
+                                                                 nsv, nsv * 100.0/ntot)
+        
+    def print_dims(self,alldata):     # debug use
+        for i,e in enumerate(alldata):
+            print 'Dim {}: \t shape {} \t type {} {}'.format(i, e.shape, type(e), e.dtype if type(e) is np.ndarray else '' )
+    def find_most_violated(self, data, train=True):
+        epoch, batchnum, alldata, dummy_list = self.find_most_violated_ext(data,
+                                                                           use_zero_margin=False, train=train)
+        return epoch, batchnum, alldata
+    @classmethod
+    def add_holdon_candidates(cls, candidate_indexes, holdon_indexes, num):
+        if holdon_indexes.size == 0:
+            return candidate_indexes
+        holdon_indexes_ext = np.tile(holdon_indexes.reshape((-1,1),order='F'),[1,num])
+        t = np.concatenate([candidate_indexes.reshape((-1, num),order='F'),
+                            holdon_indexes_ext],axis=0)
+        return t.flatten(order='F')
+    def create_candidate_indexes(self,  ndata, train=True):
+        """
+        return K_candidate, canddiate_indexes
+        """
+        data_range = self.train_dp.data_range
+        n_train = len(data_range)
+        candidate_mode = self.solver_params['candidate_mode']
+        if candidate_mode == 'random':
+            K_candidate = self.solver_params['K_candidate']
+            indexes = np.random.randint(low=0, high=n_train, size = K_candidate * ndata)
+        elif candidate_mode == 'all':
+            print 'Use All training as candidates'
+            K_candidate = n_train
+            indexes = np.array(range(0, n_train) * ndata)
+        return K_candidate, indexes
+    def find_most_violated_ext(self, data, use_zero_margin=False, train=True):
+        """
+        data = [gt, imgfeature, gt_jtfeature, margin]
+        return [gt, imgfeature, gt_jtfeature, mv_jtfeature, margin0, margin1]
+        """
+        # K_candidate = self.solver_params['K_candidate']
+        self.eval_net.set_train_mode(train)
+        K_mv = self.solver_params['K_most_violated']
+        max_num = int(self.solver_params['max_num'])
+        calc_margin = (lambda R:self.zero_margin(R)) if use_zero_margin else self.margin_func
+        train_dp =  self.train_dp
+        n_train = len(train_dp.data_range)
+        ndata = data[2][0].shape[-1] 
+        num_mini_batch = (ndata - 1) / max_num  + 1
+        K_candidate, candidate_indexes = self.create_candidate_indexes(ndata, train)
+        if train:
+            cur_counts, dummy = np.histogram(candidate_indexes, bins=range(0, n_train + 1))
+            self.stat['sample_candidate_counts'] += cur_counts
+        mvc = self.stat['most_violated_counts']
+        sorted_indexes = sorted(range(n_train), key=lambda k:mvc[k],reverse=True)
+        holdon_indexes = np.array(sorted_indexes[:K_mv])            
+        # all_candidate_features = train_dp.data_dic['feature_list'][2][..., candidate_indexes]
+        # all_candidate_targets = train_dp.data_dic['feature_list'][0][..., candidate_indexes]
+        fl = train_dp.data_dic['feature_list']
+        selected_indexes = []
+        all_candidate_indexes = []
+        for mb in range(num_mini_batch):
+            start, end = mb * max_num, min(ndata, (mb + 1) * max_num)
+            start_indexes, end_indexes = start * K_candidate, end * K_candidate
+            cur_candidate_indexes = candidate_indexes[start_indexes:end_indexes]
+
+            cur_candidate_indexes = self.add_holdon_candidates(cur_candidate_indexes,
+                                                              holdon_indexes, end-start)
+            candidate_targets = fl[0][..., cur_candidate_indexes]
+            candidate_features = fl[2][..., cur_candidate_indexes]
+            cur_num = end - start
+            K_tot = K_candidate + K_mv
+            gt_target = np.tile(data[2][0][..., start:end], [K_tot, 1]).reshape((-1, K_tot * cur_num), order='F')
+            imgfeatures = np.tile(data[2][1][..., start:end], [K_tot, 1]).reshape((-1, K_tot * cur_num ), order='F')
+            # margin = self.calc_margin(gt_target - candidate_targets)
+            margin = calc_margin(gt_target - candidate_targets)
+            alldata = [self.gpu_require(imgfeatures.T),
+                       self.gpu_require(candidate_features.T),
+                       self.gpu_require(margin.T)]
+            outputs = self.eval_net.outputs[0].eval(dict(zip(self.eval_net.inputs, alldata)))
+            
+            outputs = outputs.reshape((K_tot, cur_num),order='F')
+            m_indexes = np.argmax(outputs, axis=0).flatten() + \
+                        np.array(range(0, cur_num)) * K_tot
+            selected_indexes += cur_candidate_indexes[m_indexes].tolist()
+            all_candidate_indexes += [cur_candidate_indexes]
+        if train:
+            most_violated_cnt, dummy = np.histogram(selected_indexes,bins=range(0, n_train + 1))
+            self.stat['most_violated_counts'] += most_violated_cnt
+        most_violated_features = fl[2][..., selected_indexes]
+        most_violated_targets = fl[0][..., selected_indexes]
+        gt = data[2][0]
+        # mv_margin = self.calc_margin(gt - most_violated_targets)
+        mv_margin = calc_margin(gt - most_violated_targets)
+        gt_margin = np.zeros((1, ndata), dtype=np.single)
+        alldata = [data[2][0], data[2][1], data[2][2],
+                   most_violated_features, gt_margin, mv_margin]
+        # extra information
+        all_candidate_indexes_arr = np.concatenate(all_candidate_indexes)
+        return data[0], data[1], alldata, [most_violated_targets, all_candidate_indexes_arr]
+    @classmethod
+    def call_func(cls, func, params):
+        """
+        """
+        k = len(params)
+        if k == 1:
+            return func(params[0])
+        elif k == 2:
+            return func(params[0], params[1])
+        elif k == 5:
+            return func(params[0], params[1], params[2], params[3], params[4])
+        elif k == 3:
+            return func(params[0], params[1], params[2])
+        else:
+            raise Exception('The len of parameter {} is not supported'.format(len(params)))
+    def analyze_net_params(self, param_list):
+        import iutils as iu
+        for w in param_list:
+            iu.print_common_statistics(w)
+    def analyze_param_vs_gradients(self, param_list, gradients_list, sym_params_list):
+        for w,g,s in zip(param_list, gradients_list, sym_params_list):
+            avgw = np.mean(np.abs(w.flatten()))
+            avgg = np.mean(np.abs(g.flatten()))
+            print('{}:\t v:{:+.6e} \t g: {:+.6e} \t [{:+.6e}]'.format(s.name,
+                                                                      avgw, avgg,
+                                                                      avgg/avgw))
+    def train(self):
+        cur_data = self.get_next_batch(train=True)
+        self.epoch, self.batchnum = cur_data[0], cur_data[1]
+        while True:
+            self.train_net.set_train_mode(train=True)
+            self.eval_net.set_train_mode(train=True)
+            
+            self.print_iteration()
+            steps = self.get_search_steps()
+            compute_time_py = time()
+            most_violated_data = self.find_most_violated(cur_data, train=True)
+            alldata = [self.gpu_require(e.T) for e in most_violated_data[2][1:]]
+            # self.print_dims(alldata)
+            print 'Searching the most violated cost %.3f sec' % (time() - compute_time_py)
+            # Inside model the data are interpreted as [ndata x dim]
+            compute_time_py = time()
+            # cur_gradiens = self.grad_func(alldata)
+            cur_gradiens = self.call_func(self.grad_func, alldata)
+            params = self.train_net.params
+            eps_params = self.train_net.eps_params
+            params_host = [v.get_value(borrow=False) for v in params] # backup
+            cost_list = []
+            n_data = alldata[0].shape[0]
+            for s in steps:
+                ss = s / n_data # normalize by the size of the batch
+                inner_params_host = [p - (ss * eps) * g for p,g,eps in zip(params_host,
+                                                                           cur_gradiens,
+                                                                           eps_params)]
+                self.set_params(params, inner_params_host)
+                cur_cost = self.call_func(self.test_func, alldata)
+                cost_list += [cur_cost[0]]
+            min_idx = np.argmin(cost_list)
+            best_step = steps[min_idx]/n_data
+            print 'cost = {} \t [max: {}]'.format(cost_list[min_idx], max(cost_list))
+            self.train_error += [{'mmcost':cost_list[min_idx]/n_data}]
+            # self.print_layer_outputs(alldata)
+            # update params_host
+            g_update = [(best_step * eps) * g for g,eps in zip(cur_gradiens, eps_params)]
+            print 'best step is {}'.format(best_step)
+            self.analyze_param_vs_gradients(params_host, g_update, params )
+            params_host = [p -  g for p,g in zip(params_host, g_update)]
+            # self.analyze_net_params(params_host)
+            self.set_params(params, params_host) # copyback
+            print 'analyze_num_sv---train'
+            self.analyze_num_sv(alldata)
+            print 'Searching step (%.3f sec)' % (time()- compute_time_py)
+            compute_time_py = time()
+            if self.get_num_batches_done(True) % self.testing_freq == 0:
+                mmcost = self.get_test_error()
+                self.test_error += [{'mmcost':mmcost[0]}]
+                print 'test cost = {}'.format(mmcost[0])
+                self.save_model()
+            self.epoch,self.batchnum = self.pre_advance_batch(train=True)
+            if self.epoch  == self.num_epoch: 
+                break
+            cur_data = self.get_next_batch(train=True)
+    def pre_advance_batch(self, train=True):
+        dp = self.train_dp if train else self.test_dp
+        return dp.pre_advance_batch()
+    def get_test_error(self):
+        self.train_net.set_train_mode(train=False)
+        self.eval_net.set_train_mode(train=False)
+        test_data = self.get_next_batch(train=False)
+        most_violated_data = self.find_most_violated(test_data, train=False)
+        alldata = [self.gpu_require(e.T) for e in most_violated_data[2][1:]]
+        ndata = test_data[2][0].shape[-1]
+        mmcost = self.call_func(self.test_func, alldata)
+        print 'analyze_num_sv---test'
+        self.analyze_num_sv(alldata)
+        return [mmcost[0]/ndata]
+    def delete_previous_model(self):
+        allfiles = iu.fullfile()
+    def save_model(self):
+        net_dic = {'eval_net': self.eval_net.save_to_dic(),
+                    'train_net': self.train_net.save_to_dic()
+        }
+        net_dic = {'eval_net': self.eval_net.save_to_dic()}
+        net_dic['train_net'] = self.train_net.save_to_dic(ignore=set(['layers']))
+        net_dic['train_net']['layers'] = net_dic['eval_net']['layers']
+        model_state = {'train':{'epoch':self.train_dp.epoch, 'batchnum':self.train_dp.batchnum},
+                       'test':{'epoch':self.test_dp.epoch, 'batchnum':self.test_dp.batchnum},
+                       'stat':self.stat
+        }
+        solver_params = self.solver_params
+        solver_params['train_error'] = self.train_error
+        solver_params['test_error'] = self.test_error
+        model_name = '{:d}@{:d}'.format(self.epoch, self.batchnum)
+        allfiles = iu.getfilelist(self.save_path, '\d+@\d+$')
+        save_path = iu.fullfile(self.save_path, model_name)
+        mio.pickle(save_path, {'net_dic':net_dic, 'model_state':model_state, 'solver_params':self.solver_params})
+        print '    Saved model to {}'.format(save_path)
+        for fn in allfiles:
+            os.remove(iu.fullfile(self.save_path, fn))
+        

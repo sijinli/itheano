@@ -1,0 +1,57 @@
+import numpy as np
+class DataProvider(object):
+    def __init__(self, data_dic, train, data_range, params):
+        self.data_dic = data_dic
+        self.parse_params(params)
+        self.train = train
+        self.data_range = np.array(data_range)
+    def parse_params(self, params):
+        attributes = {'batch_size'}
+        for e in attributes:
+            setattr(self, e, params[e])
+        if 'batchnum' not in params:
+            self.batchnum = 0
+        else:
+            self.batchnum = params['batchnum']
+        if 'epoch' not in params:
+            self.epoch = 0
+        else:
+            self.epoch = params['epoch']
+class MemoryDataProvider(DataProvider):
+    def __init__(self, data_dic, train, data_range, params):
+        DataProvider.__init__(self, data_dic, train, data_range, params)
+        self.generate_batch_data(self.batch_size)
+    def generate_batch_data(self, batch_size):
+        """
+        """
+        ndata = len(self.data_range)
+        self.num_batches = int(ndata - 1) / int(batch_size) + 1
+        if self.batchnum >= self.num_batches or self.batchnum < 0:
+            self.batchnum = 0
+        batch_data = []
+        self.shuffled_data_range = np.random.permutation(self.data_range)
+        for i in range(self.num_batches):
+            start, end = i * batch_size, min((i + 1) * batch_size, ndata)
+            indexes = self.shuffled_data_range[start:end] 
+            batch_data += [[elem[..., indexes].reshape((-1,end-start),order='F')
+                           for elem in self.data_dic['feature_list']]]
+        self.batch_data = batch_data
+    def get_batch(self, batchnum):
+        return self.batch_data[batchnum]
+    def advance_batch(self):
+        self.epoch, self.batchnum = self.pre_advance_batch()
+    def pre_advance_batch(self):
+        epoch, batchnum = self.epoch, self.batchnum + 1
+        if batchnum == self.num_batches:
+            batchnum = 0
+            epoch = epoch + 1
+        return epoch, batchnum
+    def get_next_batch(self, train=True):
+        data = self.get_batch(self.batchnum)
+        epoch, batchnum = self.epoch, self.batchnum
+        self.advance_batch()
+        return epoch, batchnum, data
+    def get_num_batches_done(self, epoch, batchnum):
+        return epoch * self.num_batches + batchnum
+
+dp_dic = {'mem': MemoryDataProvider}

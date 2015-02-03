@@ -1,0 +1,8 @@
+from init_test import *
+
+
+def test():
+    pass
+
+def main():
+    pass
