@@ -71,9 +71,35 @@ def show_stat_most_violated_indexes():
     for i in range(N):
         print '{:5f}% in range [ {},{} )'.format(l[i]*100.0/total, i, i + 1)        
     pl.show()
-
+def verify_layer_outputs():
+    solver_loader = MMSolverLoader()
+    solver = solver_loader.parse()
+    net = solver.train_net
+    output_layers = net.get_layer_by_names(['net1_fc0'])
+    outputs = [lay.outputs for lay in output_layers]
+    f = theano.function(inputs=net.inputs,
+                        outputs=outputs, on_unused_input='ignore')
+    cur_data = solver.get_next_batch(train=False)
+    mvd = solver.find_most_violated(cur_data, train=False)
+    alldata = [self.gpu_require(e.T) for e in most_violated_data[2][1:]]
+    res = f(alldata)
+    ref_meta = mio.unpickle('/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_SP_t004_act_14/batches.meta')
+def test_tmp():
+    meta = mio.unpickle('/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_Raw_SP_t004_act_14/batches.meta')
+    f0, f2 = meta['feature_list'][0], meta['feature_list'][2]
+    print f0[..., 0]
+    diff = f0 - f2
+    print 'diff = {}'.format(diff.flatten().sum())
+    print '''
+    Okay, f0, f2 is gt 
+    '''
+    
+    
+  
+    
 def main():
-    show_stat_most_violated_indexes()
+    test_tmp()
+    # show_stat_most_violated_indexes()
     # show_the_most_violated_poses()
 
 

@@ -143,7 +143,7 @@ class CroppedDHMLPEJointDataWarper(DHMLPEDataWarper):
         self.cropped_mean_image = self.inner_dp.cropped_mean_image
         self.rgb_eigenvalue = self.inner_dp.rgb_eigenvalue.copy()
         self.inner_dp.rgb_eigenvalue[:] = 0
-        # Don't crop in the inner data provider
+        # Don't crop in the inner data bprovider
         self.inner_dp.input_image_dim = np.array(self.inner_dp.image_dim,dtype=np.int)
         self.inner_dp.cropped_mean_image = self.inner_dp.mean_image.copy()
         self.inner_dp.cropped_mean_image[:] = 0

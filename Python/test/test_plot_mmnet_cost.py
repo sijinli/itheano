@@ -23,8 +23,8 @@ def mark_peak_point(x,y,c):
         pre = y[i]
 def get_sampling_index(op, n):
     max_num = 2000
-    if n > 1000000:
-        return range(0, n - 1000, (n-1000)//1000) + range(n-1000, n)
+    if n > 2000:
+        return range(0, n, 15)
     else:
         return range(n)
 def make_equal(x1,x2, freq):
@@ -37,17 +37,8 @@ def make_equal(x1,x2, freq):
         t2 = t1 // freq
         return x1[:t2*freq], x2[:t2]
     return [],[]
-def process(op):
-    data_folder = op.get_value('load_file')
-    # data_folder = '/public/sijinli2/ibuffer/2015-01-16/net2_test_for_stat_2000'
-    all_files = iu.getfilelist(data_folder, '\d+@\d+$')
-    print all_files
-    d = mio.unpickle(iu.fullfile(data_folder, all_files[0]))
-    ms = d['model_state']
-    if op.get_value('cost_name') is not None:
-        cost_name = op.get_value('cost_name')
-    else:
-        cost_name = d['solver_params']['train_error'][0].keys()[0]
+
+def plot_cost(op, d, cost_name):
     train_error = get_cost(d, 'train_error', cost_name)
     test_error = get_cost(d, 'test_error', cost_name)
     testing_freq = d['solver_params']['testing_freq']
@@ -56,11 +47,9 @@ def process(op):
         print 'The length is not equal'
         train_error, test_error = make_equal(train_error, test_error, testing_freq)
     
-    
     test_error = np.tile(np.array(test_error).reshape((1, len(test_error))), [testing_freq, 1])
     test_error = test_error.flatten(order='F').tolist()
     print 'Testing freq is {}'.format(testing_freq)
-
     
     ndata = len(train_error)
     indexes = get_sampling_index(op, ndata)
@@ -73,6 +62,22 @@ def process(op):
     pl.plot(x_values, y_test_error, c='g', label='test')
     pl.title(cost_name)
     pl.legend()
+def process(op):
+    data_folder = op.get_value('load_file')
+    # data_folder = '/public/sijinli2/ibuffer/2015-01-16/net2_test_for_stat_2000'
+    all_files = iu.getfilelist(data_folder, '\d+@\d+$')
+    print all_files
+    d = mio.unpickle(iu.fullfile(data_folder, all_files[0]))
+    ms = d['model_state']
+    if op.get_value('cost_name') is not None:
+        cost_names = op.get_value('cost_name').split(',')
+        n_cost = len(cost_name)
+    else:
+        n_cost = len(d['solver_params']['train_error'][0])
+        cost_names = d['solver_params']['train_error'][0].keys()
+    for i in range(n_cost):
+        pl.subplot(n_cost, 1, i + 1)
+        plot_cost(op, d, cost_names[i])
     pl.show()
     
 def main():

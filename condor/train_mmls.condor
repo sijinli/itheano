@@ -1,7 +1,7 @@
-exp_name=SP_t004_act_14
+exp_name=Raw_SP_t004_act_14
 DP=mem
-macid=16
-JT=0013
+macid=14
+JT=0014
 EP=200
 BSIZE=1024
 run_mac=c8k$(macid)

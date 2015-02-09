@@ -62,6 +62,9 @@ DATE: Feb 1 2015
 }
 
 RUN {
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_01_acm_act_14_exp_2_15
+The performance becomes to decrease at some points because nan appears.
+
 DATE: Feb 1, 2015
 exp_name=SP_t004_act_14
 DP=mem
@@ -79,9 +82,68 @@ save_name=$(exp_name)_$(JT)
 save_folder = /opt/visal/tmp/for_sijin/Data/saved/theano_models/
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/SP_t004_act_14_0010
 COMMENT: Dropout +  one more layer
+MPJPE: 86.3369
+}
+
+RUN {
+Feb 2 2015
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_02_acm_act_14_exp_2_19_graph_0012/
+Eval@Feb4-2015-09:40AM: mean mpjpe = 79.672750975 epoch = 71
+Eval@Feb5-2015-09:44AM: mean mpjpe = 79.679860815 epoch = 120
+
+Feb 3 2015
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/SP_t004_act_14_graph_0013/
+With smaller keep and number nodes, it still tends to overfit.
+MPJPE=87.11156 ( However, it is worse than previous performance) Random 20000
+MPJPE=80.8717975359 (random, epoch 70)
 }
 
 RUN {
 Feb 3 2015
-
+exp_name=Embedding_ASM_act_14_exp_2_ACCV_fc_j0
 }
+
+RUN {
+exp_name=FCJ0_act_12
+DP=mem
+macid=15
+JT=0016
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+TrainRange=0-76047
+TestRange=76048-105367
+test_freq=15
+save_name=2015_02_08_FCJ0_act_12_graph_0016
+COMMENTS: The scale of the input is really important
+COMMENTS: MPJPE@200 epach:170.924891536
+}
+
+RUN {
+Feb 8
+exp_name=ASM_act_3_exp_8
+DP=croppedjt
+macid=14
+JT=0012
+EP=200
+BSIZE=128
+run_mac=c8k$(macid)
+TrainRange=0-158787
+TestRange=158788-223031
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_08_ASM-act_3_exp_8_14_graph_0012
+COMMENTS:14 is macid
+
+exp_name=ASM_act_4_exp_5
+DP=croppedjt
+macid=18
+JT=0012
+EP=200
+BSIZE=128
+run_mac=c8k$(macid)
+TrainRange=0-109423
+TestRange=109424-148731
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_08_ASM_act_4_exp_5_18_graph_0012
+}
+
+
+

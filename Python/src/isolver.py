@@ -37,6 +37,8 @@ class SolverLoader(object):
                       options.StringOptionParser, 'layer definition file (.cfg)',default='')
         op.add_option('testing-freq', 'testing_freq', options.IntegerOptionParser,
                       'testing frequency', default=1)
+        op.add_option('mini', 'mini', options.IntegerOptionParser, 'mini batch size',
+                      default=-1)
         op.add_option('batch-size', 'batch_size', options.IntegerOptionParser, 'batch size',
                       default=None)
         op.add_option('train-range', 'train_range', options.RangeOptionParser, 'train range',
@@ -47,6 +49,7 @@ class SolverLoader(object):
                       default=None)
         op.add_option('solver-type', 'solver_type', options.StringOptionParser, 'solver type',
                       default=None)
+        
     def parse(self):
         self.op.parse()
         self.op.eval_expr_defaults()
@@ -127,6 +130,8 @@ class SolverLoader(object):
         solver_params = dict()
         self.parse_solver_params(solver_params, op)
         solver_type = op.get_value('solver_type')
+        if solver_type is None and 'solver_type' in saved_params:
+            solver_type = saved_params['solver_type']
         _cls = solver_dic[solver_type] 
         required_list = _cls._required_field
         default_dic = dict(_cls._default_list)
@@ -151,10 +156,11 @@ class SolverLoader(object):
         return solver
     
 class Solver(object):
-    _default_list = []
+    _default_list = [('mini', -1)]
     _required_field =  ['num_epoch', 'save_path', 'testing_freq', 'solver_type']
     _required_attributes =  ['num_epoch', 'save_path', 'testing_freq']
     _resuming_field  = ['train_error', 'test_error']
+    _solver_type = 'solver'
     def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
         self.train_dp = train_dp
         self.test_dp = test_dp
@@ -195,6 +201,7 @@ class Solver(object):
             self.safe_set_attr(solver_params, e, [])
         if 'dp_params' in solver_params:
             self.solver_params['dp_params']= solver_params['dp_params']
+        self.solver_params['solver_type'] = self._solver_type
     def print_iteration(self):
         print '------------------------'
         print 'In iteration {}.{} of {}'.format(self.epoch, self.batchnum,self.num_epoch)
@@ -206,6 +213,46 @@ class Solver(object):
         print '    Saved model to {}'.format(save_path)
         for fn in allfiles:
             os.remove(iu.fullfile(self.save_path, fn))
+    @classmethod
+    def write_features(cls, dp, net, save_folder, output_layer_names = None,
+                       test_one=False, inputs=None, dataidx=None):
+        if inputs is None:
+            inputs = net.inputs
+        if dataidx is None:
+            dataidx = range(len(inputs))
+        num_batch = dp.num_batch
+        res = dict()
+        tmp_res = []
+        if output_layer_names is None:
+            outputs = net.outputs
+        else:
+            output_layers = net.get_layer_by_names(output_layer_names)
+            outputs = sum([lay.outputs for lay in output_layers], [])
+        func = theano.function(inputs=inputs,outputs=outputs,
+                               on_unused_input='ignore')
+        iu.ensure_dir(save_folder)
+        saved = dict()
+        saved['info'] = dict()
+        saved['info']['feature_names'] = [e.name for e in outputs]
+        net.set_train_mode(False)
+        dp.reset()
+        for b in range(num_batch):
+            epoch, batchnum, alldata = dp.get_next_batch()
+            input_data = [Solver.gpu_require(alldata[k].T) for k in dataidx]
+            res = func(*input_data)
+            tmp_res += [res]
+            save_path = iu.fullfile(save_folder, 'batch_feature_%d' % batchnum)
+            saved['feature_list'] = [e.T for e in res]
+            saved['feature_dim'] = [e.shape[:-1] for e in saved['feature_list']]
+            saved['info']['indexes'] = dp.get_batch_indexes()
+            cur_indexes = saved['info']['indexes']
+            print 'write range [{}, {}]'.format(min(cur_indexes), max(cur_indexes))
+            mio.pickle(save_path, saved)
+            ndata = input_data[0].shape[0]
+            print 'Finish batch {} (ndata = {} shape is {}'.format(batchnum,
+                                                                  ndata,saved['feature_dim'])
+            if test_one:
+                break
     @classmethod
     def get_saved_model(cls, saved_folder):
         allfiles = iu.getfilelist(saved_folder, '\d+@\d+$')
@@ -233,6 +280,7 @@ class MMLSSolver(Solver):
     _default_list = [('candidate_mode', 'random')] + Solver._default_list
     _required_field = ['K_candidate', 'max_num', 'K_most_violated', 'candidate_mode',
                        'margin_func'] + Solver._required_field
+    _solver_type='mmls'
     def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
         Solver.__init__(self, net_obj_list, train_dp, test_dp, solver_params)
         self.eval_net, self.train_net = net_obj_list[0], net_obj_list[1]
@@ -436,17 +484,18 @@ class MMLSSolver(Solver):
     def call_func(cls, func, params):
         """
         """
-        k = len(params)
-        if k == 1:
-            return func(params[0])
-        elif k == 2:
-            return func(params[0], params[1])
-        elif k == 5:
-            return func(params[0], params[1], params[2], params[3], params[4])
-        elif k == 3:
-            return func(params[0], params[1], params[2])
-        else:
-            raise Exception('The len of parameter {} is not supported'.format(len(params)))
+        return func(*params)
+        # k = len(params)
+        # if k == 1:
+        #     return func(params[0])
+        # elif k == 2:
+        #     return func(params[0], params[1])
+        # elif k == 5:
+        #     return func(params[0], params[1], params[2], params[3], params[4])
+        # elif k == 3:
+        #     return func(params[0], params[1], params[2])
+        # else:
+        #     raise Exception('The len of parameter {} is not supported'.format(len(params)))
     def analyze_net_params(self, param_list):
         import iutils as iu
         for w in param_list:
@@ -462,7 +511,6 @@ class MMLSSolver(Solver):
         cur_data = self.get_next_batch(train=True)
         self.epoch, self.batchnum = cur_data[0], cur_data[1]
         while True:
-           
             self.print_iteration()
             steps = self.get_search_steps()
             compute_time_py = time()
@@ -554,7 +602,7 @@ class BasicBPSolver(Solver):
                                   =  weights(t-1) + weights_inc(t-1) * mom - eps * g_weights(t) 
     DONE : Add W_inc_list, b_inc into layer with weigths Need to check
     """
-
+    _solver_type='basicbp'
     def __init__(self, net_list, train_dp, test_dp, solver_params=None):
         Solver.__init__(self, net_list, train_dp, test_dp, solver_params)
         # I need the output of all cost
@@ -573,7 +621,7 @@ class BasicBPSolver(Solver):
         self.monitor_name = ['cost_list', 'mean_weights', 'mean_inc']
         self.train_func = theano.function(inputs=self.net.inputs,
                                           outputs=self.monitor_list,
-                                          updates= param_updates + param_inc_updates
+                                          updates= param_updates + param_inc_updates,
         )
         self.test_func = theano.function(inputs=self.net.inputs,
                                          outputs= self.net.cost_list)
@@ -617,6 +665,31 @@ class BasicBPSolver(Solver):
         assert(len(avg_w) == len(avg_g) and len(avg_w) == len(w_name))
         for wn, aw, ag in zip(w_name, avg_w, avg_g):
             print '    {}:\t avg value={:.2e}\t avg gradients={:.2e}\t [{:.2e}]'.format(wn, aw[()], ag[()], ag[()]/aw[()])
+    def process_data(self, input_data, train):
+        func = self.train_func if train else self.test_func
+        n_size = input_data[0].shape[0]
+        mini = self.solver_params['mini'] if self.solver_params['mini'] > 0 else n_size
+        n_mini_batch = n_size
+        info_l = []
+        for b in range(n_mini_batch):
+            indexes = range(b * mini, min((b + 1)* mini, n_size))
+            cur_input = [e[indexes , ...] for e in  input_data]
+            info = func(*cur_input)
+            info_l += [info]
+        # <<<<<<<<<<<<<< How to deal with cost and info separately?>
+    def DEBUG_show_layer_statistcs(self, input_data):
+        names = ['sqdiffcost_reconstruct', 'joints', 'fc_f1']
+        outputs = sum([self.net.layers[name][2].outputs for name in names], [])
+        func = theano.function(inputs=self.net.inputs,
+                               outputs=outputs)
+        res = func(*input_data)
+        for e in self.net.inputs:
+            print 'input = {}'.format(e)
+        print 'HHHHH See input\n\n\n'
+        iu.print_common_statistics(input_data[0])
+        for e_res,e_out in zip(res, outputs):
+            print 'layer name = {}'.format(e_out.name)
+            iu.print_common_statistics(e_res)
     def train(self):
         cur_data = self.get_next_batch(train=True)
         self.epoch, self.batchnum=cur_data[0], cur_data[1]
@@ -626,14 +699,19 @@ class BasicBPSolver(Solver):
             compute_time_py = time()
             input_data = self.prepare_data(cur_data[2])
             self.lr.set_value(np.cast[theano.config.floatX](1.0/input_data[0].shape[0]))
+            
             info = self.train_func(*input_data)
+            # self.DEBUG_show_layer_statistcs(input_data)
+            
             costs = info[:self.monitor_idx[1]]
             normalized_cost = [c/input_data[0].shape[0] for c in costs]
-            self.print_monitor_info(info)
+
             self.train_error += [self.pack_cost(normalized_cost)]
             print '{} seconds '.format(time()- compute_time_py)
-            self.print_cost(train=True)
             if self.get_num_batches_done(True) % self.testing_freq == 0:
+                self.print_monitor_info(info)
+                self.print_cost(train=True)
+                
                 compute_time_py = time()
                 test_costs = self.get_test_error()
                 normalized_test_cost = [c/input_data[0].shape[0] for c in test_costs]

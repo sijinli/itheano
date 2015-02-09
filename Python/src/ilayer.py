@@ -54,18 +54,39 @@ class LayerParser(object):
         raise LayerException('Can not instantiate a Layer base class')
 
 class LayerWithWeightsParser(LayerParser):
+    @classmethod
+    def parse_external_func(cls, st):
+        p0 = st.find('.')
+        p1 = st.find('(',p0)
+        p2 = st.rfind(')')
+        module_name, func_name, tmp_params = st[:p0].strip(), st[p0+1:p1].strip(), st[p1+1:p2]
+        func_params = [p.strip() for p in tmp_params.split(',')]
+        module = __import__(module_name, globals(), locals(), [func_name])
+        f = eval('module.{}'.format(func_name))
+        def func(name, sp, params=None):
+            return f(name, sp, func_params)
+        return func, func_params
     def parse_layer_params(self):
         try:
             dic = LayerParser.parse_layer_params(self)
-            self.mcp.check_options(self.name, ['initW', 'initb'])
-            dic['initW'] = self.mcp.safe_get_float_list(self.name, 'initW')
-            dic['initb'] = self.mcp.safe_get_float_list(self.name, 'initb')
+            self.mcp.check_options_with_excuse(self.name, ['initW', 'initb'],
+                                               {'initW':['initWfunc', 'weightSource'],
+                                                'initb':['initBfunc', 'biasSource']})
+            n = len(self.inputs)
+            dic['initW'] = self.mcp.safe_get_float_list(self.name, 'initW',default=[0] * n)
+            dic['initb'] = self.mcp.safe_get_float_list(self.name, 'initb',default=[0] * n)
             dic['wd'] = self.mcp.safe_get_float_list(self.name, 'wd')
-            # epsW, epsB is the learning rate for weights and biases
-            dic['epsW'] = self.mcp.safe_get_float_list(self.name, 'epsW', default=[1.0] * len(dic['wd']))
+            # epsW, epsB is the (relative) learning rate for weights and biases
+            dic['epsW'] = self.mcp.safe_get_float_list(self.name, 'epsW', default=[1.0] * n)
             dic['epsB'] = self.mcp.safe_get_float_list(self.name, 'epsB', default= [1.0])
-            dic['momW'] = self.mcp.safe_get_float_list(self.name, 'momW', default=[0.9] * len(dic['wd']))
+            dic['momW'] = self.mcp.safe_get_float_list(self.name, 'momW', default=[0.9] * n)
             dic['momB'] = self.mcp.safe_get_float_list(self.name, 'momB', default=[0.9])
+
+            for e in ['initWfunc', 'initBfunc']:
+                if self.mcp.has_option(self.name, e):
+                    st = self.mcp.safe_get(self.name, e)
+                    func, func_params = self.parse_external_func(st)
+                    dic[e] = func
             assert( len(dic['epsW']) == len(dic['wd']))
             
             if self.advanced_params:
@@ -157,18 +178,50 @@ class LayerWithWeightsLayer(Layer):
             for idx, r in enumerate(res):
                 r.name = '%s_%d' % (var_base_name, idx)
         return res
-        
+    def get_w_shape(self, param_dic):
+        raise Exception('get w shape in base class')
+    def get_b_shape(self, param_dic):
+        raise Exception('get_b_shape:in base class')
+    def initW(self, param_dic):
+        W_list = []
+        sp_list = self.get_w_shape(param_dic)
+        for i, sp in enumerate(sp_list):
+            W_value = np.require(np.random.randn(*sp) * param_dic['initW'][i],
+                                 dtype=theano.config.floatX)
+            W_list += [theano.shared(W_value,borrow=False, name='%s_weights_%d' % (param_dic['name'],i))]
+        self.W_list = W_list
+    def initb(self, param_dic):
+        s = param_dic['initb']
+        sp = self.get_b_shape(param_dic)
+        b_value = np.ones(sp,dtype=theano.config.floatX) * np.cast[theano.config.floatX](s) 
+        self.b = theano.shared(b_value,borrow=False)
+        self.b.name = '%s_biases_%d' % (param_dic['name'], 0)
     def parse_param_dic(self, param_dic):
         Layer.parse_param_dic(self, param_dic)
         if not 'weights' in param_dic:
-            self.initW(param_dic)
+            if 'initWfunc' in param_dic:
+                sp_list = self.get_w_shape(param_dic)
+                W_value_list = param_dic['initWfunc'](param_dic['name'], sp_list)
+                self.W_list = [theano.shared(np.cast[theano.config.floatX](W_value),
+                                             borrow=False,
+                                             name='%s_weights_%d' % (param_dic['name'],i))
+                               for i, W_value in enumerate(W_value_list)]
+            else:
+                self.initW(param_dic)
             self.initW_inc()
         else:
             self.W_list = param_dic['weights']
             self.W_inc_list = param_dic['weights_inc']
             print '    Init weights from outside<' + ','.join([w.name for w in self.W_list]) + '>'
         if not 'biases' in param_dic:
-            self.initb(param_dic)
+            if 'initBfunc' in param_dic:
+                sp = self.get_b_shape(param_dic)
+                b_value = param_dic['initBfunc'](param_dic['name'], sp)
+                self.b= theano.shared(np.cast[theano.config.floatX](b_value),
+                                      name='%s_biases_%d' % (param_dic['name'], 0),
+                                      borrow=False)
+            else:
+                self.initb(param_dic)
             self.initb_inc()
         else:
             self.b = param_dic['biases']
@@ -188,8 +241,8 @@ class LayerWithWeightsLayer(Layer):
         self.params_mom = self.momW + self.momB
     def save_to_dic(self):
         save_dic = self.param_dic.copy()
-        # Those value might be saved in gpu
-        for e in ['weights', 'biases', 'weights_inc', 'biases_inc']:
+        # Those value might be saved in gpu or it is of function type
+        for e in ['weights', 'biases', 'weights_inc', 'biases_inc', 'initWfunc', 'initBfunc']:
             if e in save_dic:
                 del save_dic[e]
         save_dic['weights'] = [w.get_value() for w in self.W_list]
@@ -260,12 +313,14 @@ class DataLayer(Layer):
             self.parse_param_dic(param_dic)
         if self.activation_func:
             self.inputs = inputs
-            self.outputs = [self.activation_func(e) for e in inputs]
+            self.outputs = [self.activation_func(e) for e in self.inputs]
         else:
             self.inputs = self.outputs = inputs
         self.param_dic['type'] = 'data'
         self.param_dic['input_dims'] = param_dic['input_dims']
         self.param_dic['output_dims'] = self.param_dic['input_dims']
+        # for e1,e2 in zip(self.inputs, self.outputs):
+        #     print '{} ----> {}\n\n'.format(e1,e2)
         for idx,e in enumerate(self.outputs):
             e.name = self.get_var_name(self.param_dic['name'], 'outputs[{}]'.format(idx))
 class ElementwiseSumParser(LayerParser):
@@ -342,16 +397,10 @@ class FCLayer(LayerWithWeightsLayer):
     def check_shape(self, tensor_a, shape):
         if not tensor_a.get_value().shape == shape:
             raise LayerException('Tensor {} shape is not correct {} vs {}'.format(tensor_a.name, tensor_a.get_value().shape, shape))
-    def initW(self, param_dic):
-        W_list = []
-        for i, d in enumerate(param_dic['input_dims']):
-            source_d = d if type(d) is int else int(np.prod(d)) 
-            W_value = np.require(np.random.randn(source_d, param_dic['output_dims'][0]) * param_dic['initW'][i], dtype=theano.config.floatX)
-            W_list += [theano.shared(W_value,borrow=False, name='%s_weights_%d' % (param_dic['name'],i))]
-        self.W_list = W_list
-    def initb(self, param_dic):
-        b_value = np.require(np.ones(param_dic['output_dims'][0]) * param_dic['initb'], dtype=theano.config.floatX)
-        self.b = theano.shared(b_value,borrow=False, name='%s_biaes_%d' % (param_dic['name'], 0))
+    def get_w_shape(self, param_dic):
+        return [(int(np.prod(d)), param_dic['output_dims'][0]) for d in param_dic['input_dims']]
+    def get_b_shape(self, param_dic):
+        return (param_dic['output_dims'][0],)
 
 
 class ConvParser(LayerWithWeightsParser):
@@ -441,28 +490,15 @@ class ConvDNNLayer(LayerWithWeightsLayer):
         else:
             self.outputs = [lin_outputs]
         self.set_output_names(self.param_dic['name'], self.outputs)
-    def initW(self, param_dic):
-        W_list = []
+    def get_w_shape(self,  param_dic):
         filters= param_dic['filters']
-        for i, d in enumerate(param_dic['input_dims']):
-            sp = [filters, d[0], param_dic['sizeY'][i], param_dic['sizeX'][i]]
-            W_value = np.require(np.random.randn(sp[0], sp[1], sp[2], sp[3]) * param_dic['initW'][i], dtype=theano.config.floatX)
-            W_list += [theano.shared(W_value,borrow=False, name='%s_weights_%d' % (param_dic['name'],i))]
-        self.W_list = W_list
-    def initb(self, param_dic):
-        s = param_dic['initb']
-        flag = param_dic['sharebias']
-        if flag == 0:
-            dims = param_dic['output_dims'][0]
-            b_value = np.require(np.ones((dims[0], dims[1], dims[2])) * s, dtype=theano.config.floatX)
-            self.b = theano.shared(b_value,borrow=False)
-            self.b.name = '%s_biases_%d' % (param_dic['name'], 0)
-        elif flag == 1:
-            dims = param_dic['output_dims'][0]
-            b_value = np.require(np.ones((dims[0])) * s, dtype=theano.config.floatX)
-            self.b = theano.shared(b_value,borrow=False)
-            self.b.name = '%s_biases_%d' % (param_dic['name'], 0)
-
+        return [(filters, d[0], sy, sx) for d, sy, sx in zip(param_dic['input_dims'],
+                                                             param_dic['sizeY'],
+                                                             param_dic['sizeX'])]
+    def get_b_shape(self, param_dic):
+        flag, dims = param_dic['sharebias'], param_dic['output_dims'][0]
+        return (dims[0],) if flag == 1 else (dims[0], dims[1], dims[2])
+            
 class PoolParser(LayerParser):
     def parse_layer_params(self):
         dic = LayerParser.parse_layer_params(self)
@@ -662,7 +698,7 @@ class Network(object):
         else:
             self.costs = None
         data_layers = self.get_layer_by_names(config_dic['data_layer_names'])
-        self.inputs = sum([l.outputs for l in data_layers],[])
+        self.inputs = sum([l.inputs for l in data_layers],[])
         output_layers = self.get_layer_by_names(config_dic['output_layer_names'])
         if output_layers:
             self.outputs = sum([l.outputs for l in output_layers], [])

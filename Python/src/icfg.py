@@ -23,6 +23,16 @@ class IConfigParser(cfg.SafeConfigParser):
         for e in option_list:
             if not self.has_option(name, e):
                 raise IConfigParserError('Section {} Required option {} missing'.format(name, e))
+    def check_options_with_excuse(self, name, option_list, excuse_dic):
+        if excuse_dic is None or len(excuse_dic) == 0:
+            self.check_options(name, option_list)
+        for e in option_list:
+            if not self.has_option(name, e):
+                if e in excuse_dic and sum([self.has_option(name, ex)
+                                            for ex in excuse_dic[e]]) == 0:
+                    raise IConfigParserError('Section {} Required option {} missing'.format(name, e))
+                    
+            
     def safe_get(self, section, option, f=cfg.SafeConfigParser.get, typestr=None, default=None):
         try:
             return f(self, section, option)

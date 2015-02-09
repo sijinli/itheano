@@ -1,0 +1,241 @@
+"""
+
+Usage
+# for training
+python ~/Projects/DHMLPE/Python/task/train_linear_regression.py --mode=train --train-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/train --save-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/trained_model
+
+python ~/Projects/DHMLPE/Python/task/train_linear_regression.py --mode=train --train-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/train --save-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/trained_model --mode-params=mlr,abs_cut,0.3 --model-name=mask_linear_model_t0.3
+
+# For test | test_conf
+python ~/Projects/DHMLPE/Python/task/train_linear_regression.py --mode=test  --test-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/test --trained-model-path=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/trained_model/linear_model
+
+python ~/Projects/DHMLPE/Python/task/train_linear_regression.py --mode=test_conf  --test-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/test --trained-model-path=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/trained_model/mask_linear_model_t0.3 --save-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/result/ --mode-params=mlr --save-name=testres_mlr_t0.3
+
+
+# for validation
+python ~/Projects/DHMLPE/Python/task/train_linear_regression.py --mode=validation --train-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/train --save-dir=/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/trained_model --model-name=validate_linear_model
+
+# for viewing
+
+python ~/Projects/DHMLPE/Python/task/train_linear_regression.py --mode=view --mode-params=show_err_vs_conf,/public/sijinli2/ibuffer/2014-08-06/c8k19_ConvNet__2014-08-02_11.08.01/result/testres_mlr,4 
+
+
+"""
+from init_task import *
+from  ipyml.regression import *
+import iread.myio as mio
+import pylab as pl
+def get_feature_dim(p):
+    d = mio.unpickle(p)
+    return d['X'].shape[0]
+def make_data_generator(allfile):
+    for fp in allfile:
+        print 'loading %s' % fp
+        d = mio.unpickle(fp)
+        if 'Y' in d:
+            yield d['X'], d['Y']
+        else:
+            yield d['X'], None
+def get_file_path(op, feature_dir):
+    feature_name = 'fc_j1'
+    all_file_name = sorted(iu.getfilelist(feature_dir, 'batch_feature_\d+_%s$' % feature_name))
+    all_file_path = [iu.fullfile(feature_dir, x) for x in all_file_name]
+    return all_file_path
+def train(op):
+    feature_dir = op.get_value('train_dir')
+    all_file_path = get_file_path(op, feature_dir)
+    save_path = iu.fullfile( op.get_value('save_dir'), op.get_value('model_name'))
+    mode_params = parse_param_list(op.get_value('mode_params'))
+    model_type = mode_params[0]
+    if model_type == 'mlr':
+        r_params = {'weight_mask_method':{'name':mode_params[1], \
+                                          'params':[float(mode_params[2])]}}
+        r = MaskLinearRegression(r_params)
+    else:
+        r = LinearRegression()
+    print 'Begin to fit data'
+    r.fit(lambda :make_data_generator(all_file_path))
+    iu.ensure_dir(op.get_value('save_dir'))
+    r.save(save_path)    
+def validate(op):
+    import dhmlpe_evaluation as deva
+    feature_dir = op.get_value('train_dir')
+    all_file_path = get_file_path(op, feature_dir)
+    save_path = iu.fullfile( op.get_value('save_dir'), op.get_value('model_name'))
+    sigma_list = [0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100,0]
+    if len(all_file_path) < 2:
+        raise Exception('Validation mode can only be used when the number of data is larger than 2')
+    target_type = op.get_value('target_type')
+    print 'target_type = %s' % target_type
+    feature_dim = get_feature_dim(all_file_path[0])
+    params = dict()
+    elist = []
+    model_list = []
+    for s in sigma_list:
+        print 'Using sigma = %.8f' % s
+        params['Sigma'] = s * np.ones((feature_dim + 1, 1))
+        r = LinearRegression(params)
+        print '    Begin to fit data'
+        dim, scale =3, 1200
+        eva = deva.MPJPE(dim, scale) # for feature_dim and scale
+        r.fit(make_data_generator(all_file_path[:-1]))
+        for X,Y in make_data_generator([all_file_path[-1]]):
+            Y_est = r.apply(X)
+            if target_type in convert_dic:
+                Y_est = convert_dic[target_type](Y_est)
+                Y = convert_dic[target_type](Y)
+            t1, t2 = eva.evaluate(Y, Y_est)
+            break
+        elist += [t1/t2 * scale]
+        model_list += [r]
+        print '====================='
+        print 'cur_err = %.6f' % (t1/t2 * scale)
+        print '====================='
+    print elist
+    best_index = np.argmin(elist)
+    iu.ensure_dir(op.get_value('save_dir'))
+    model_list[best_index].save(save_path)
+
+    
+def convert_relskel2rel(X):
+    import dhmlpe_features as df
+    return df.convert_relskel2rel(X)
+def test(op):
+    import dhmlpe_evaluation as deva
+    feature_dir = op.get_value('test_dir')
+    target_type = op.get_value('target_type')
+    if op.get_value('mode') == 'test_conf':
+        test_conf = True
+        conf_list = []
+    else:
+        test_conf = False
+    if op.get_value('mode_params'):
+        model_type = op.get_value('mode_params')
+        if model_type == 'mlr':
+            r = MaskLinearRegression()
+            mconf_list = []
+        else:
+            r = LinearRegression()
+    else:
+        model_type = 'lr'
+        r = LinearRegression()
+    r.load(op.get_value('trained_model_path'))
+    r.get_invXX_list()
+    print 'Model loading succussfully'
+    all_file_path = get_file_path(op, feature_dir)
+    dim, scale =3, 1200
+    eva = deva.MPJPE(dim, scale, True, True) # for feature_dim and scale
+    for X,Y in make_data_generator(all_file_path):
+        Y_est = r.apply(X)
+        if target_type in convert_dic:
+            Y_est = convert_dic[target_type](Y_est)
+            Y = convert_dic[target_type](Y)
+        t1, t2 = eva.evaluate(Y, Y_est)
+        print 'cur MPJPE = %.6f' % (t1/t2 * scale)
+        if test_conf:
+            Yconf = r.calc_confidence(X)
+            if model_type == 'mlr':
+                mconf_list += [Yconf]
+                print Yconf.shape
+            conf_list += [Yconf.sum(axis=0).flatten().tolist()]
+    eva.print_result()
+    if op.get_value('save_dir'):
+        save_dir = op.get_value('save_dir')
+        if op.get_value('save_name'):
+            save_name = op.get_value('save_name')
+        else:
+            save_name = 'testres_%s_t0.1' % model_type
+        save_path = iu.fullfile(save_dir, save_name)
+        print 'Save results to %s ' % save_path
+        resd = dict()
+        resd['mpjpe_err'] = eva.get_err()
+        resd['ori_err']= eva.get_ori_err()
+        if model_type == 'mlr':
+            print len(mconf_list)
+            resd['mconf'] = np.concatenate(mconf_list, axis=-1) * (scale**2)
+        elif test_conf:
+            resd['conf'] = np.asarray(conf_list).reshape((1,-1)) * (scale * scale)
+        mio.pickle(save_path, resd)
+    if len(conf_list) > 0:
+        pass
+        #pl.plot(range(eva.ndata), np.asarray(eva.err_list) * 1200)
+        #pl.plot(range(eva.ndata), np.sqrt(np.asarray(conf_list)) * 1200 )
+        #pl.show()
+def parse_param_list(s):
+    l =  s.split(',')
+    return [int(x) if x.isdigit() else x for x in l]
+def calc_cos(s1,s2):
+    s1,s2 = s1.flatten(), s2.flatten()
+    n1,n2 = np.sqrt(np.sum(s1**2)), np.sqrt(np.sum(s2**2))
+    if n1 == 0:
+        n1 = 1
+    if n2 == 0:
+        n2 = 1
+    return np.sum(s1 * s2)/n1/n2
+def norm2(x):
+    return max(np.sqrt(np.sum((x.flatten() **2))),1e-20)
+def show_err(op, err_save_path, dim):
+    errd = mio.unpickle(err_save_path)
+    ndata = errd['mconf'].shape[-1]
+    print 'path = %s \n dim = %d' % (err_save_path, dim)
+    print np.median(errd['ori_err'][dim,:]), np.median(errd['mconf'][dim,:])
+    pl.subplot(3,1,1)
+    pl.plot(range(ndata), errd['ori_err'][dim,:], c='b')
+    pl.plot(range(ndata), errd['mpjpe_err'].flatten(), c='r')
+    pl.subplot(3,1,2)
+    pl.plot(range(ndata), np.sqrt(errd['mconf'][dim,:]), c = 'g')
+    pl.subplot(3,1,3)
+    pl.plot(range(ndata), errd['ori_err'][dim,:]/norm2(errd['ori_err'][dim,:]), c='b')
+    pl.plot(range(ndata), errd['mpjpe_err'].flatten()/norm2(errd['mpjpe_err']), c='r')
+    pl.plot(range(ndata), np.sqrt(errd['mconf'][dim,:])/norm2(np.sqrt(errd['mconf'][dim,:])), c = 'g')
+    print 'similarity mpjpe vs conf is %.6f' % \
+      calc_cos(errd['mpjpe_err'], errd['mconf'][dim,:])
+    print 'similarity ori_err vs conf is %.6f' % \
+      calc_cos(errd['ori_err'][dim,:], errd['mconf'][dim,:])
+    pl.show()
+def compare_conf(op, err_save_path, dim1, dim2):
+    errd = mio.unpickle(err_save_path)
+    ndata = errd['mconf'].shape[-1]
+    print 'path = %s \n dim = %d, %d' % (err_save_path, dim1,dim2)
+    pl.subplot(2,1,1)
+    pl.plot(range(ndata), errd['mconf'][dim1,:], c='b')
+    pl.plot(range(ndata), errd['mconf'][dim2,:], c='g')
+    pl.subplot(2,1,2)
+    pl.plot(range(ndata), errd['mconf'][dim1,:]/errd['mconf'][dim2,:], c='b')
+    pl.show()
+def show_view(op):
+    """
+    This is used for displaying results
+    """
+    view_params = parse_param_list(op.get_value('mode_params'))
+    view_type = view_params[0]
+    if view_type == 'show_err_vs_conf':
+        show_err(op, view_params[1], view_params[2])
+    elif view_type == 'compare_conf':
+        compare_conf(op, view_params[1], view_params[2], view_params[3])
+def main():
+    op = OptionsParser()
+    op.add_option("mode", "mode", StringOptionParser, '[train|test| test_conf | validation | view]', excuses=OptionsParser.EXCLUDE_ALL)
+    op.add_option("mode-params", "mode_params", StringOptionParser, '[mlr]')
+    op.add_option("train-dir", "train_dir", StringOptionParser, "The dir for training features")
+    op.add_option("test-dir", "test_dir", StringOptionParser, "The dir for testing features")
+    op.add_option('save-dir', 'save_dir', StringOptionParser, 'The dir for saving models')
+    op.add_option('model-name', 'model_name', StringOptionParser, 'The dir for saving models', default='linear_model')
+    op.add_option('target-type', 'target_type', StringOptionParser, 'the type of target', default='relskel')
+    op.add_option('trained-model-path', 'trained_model_path', StringOptionParser, 'The path of pre-trained model')
+    op.add_option('save-name', 'save_name', StringOptionParser, 'the name for saving')
+    op.parse()
+    op.eval_expr_defaults()
+    mode = op.get_value('mode')
+    if mode == 'train':
+        train(op)
+    elif mode in ['test', 'test_conf']:
+        test(op)
+    elif mode == 'validation':
+        validate(op)
+    elif mode == 'view':
+        show_view(op)
+if __name__ == '__main__':
+    convert_dic = {'relskel':convert_relskel2rel}
+    main()
+

@@ -1,15 +1,16 @@
-exp_name=ASM_act_14_exp_2
+exp_name=ASM_act_4_exp_5
 DP=croppedjt
-macid=19
+macid=18
 JT=0012
 EP=200
 BSIZE=128
 run_mac=c8k$(macid)
 
-TrainRange=0-132743
-TestRange=132744-162007
+TrainRange=0-109423
+TestRange=109424-148731
+
 test_freq=15
-save_name=2015_02_02_acm_act_14_exp_2_$(macid)_graph_$(JT)
+save_name=2015_02_08_$(exp_name)_$(macid)_graph_$(JT)
 
 SP_NOTE=
 

@@ -60,8 +60,29 @@ class Sigmoid(Activation):
     @classmethod
     def __call__(self, X):
         return tensor.nnet.sigmoid(X)
+class Linear(Activation):
+    """
+    linear[a,b](x) =  a * x + b
+    """
+    def __init__(self, act_params=None):
+        self.name = 'linear'
+        self.do_calc = False
+        if len(act_params) == 2:
+            self.a = theano.shared(np.cast[theano.config.floatX](act_params[0]))
+            self.b = theano.shared(np.cast[theano.config.floatX](act_params[1]))
+            if float(act_params[0]) != 1 or float(act_params[1])!=0:
+                self.do_calc = True
+        else:
+            self.a = self.b = None
+    def __call__(self, X):
+        if self.do_calc:
+            return self.a * X + self.b
+        else:
+            return X
 def make_actfunc(name, params):
     return act_dic[name](params)
 
+
+
 act_dic = {'relu':Relu, 'relu2':Relu2, 'abs':Abs, 'binary_crossentropy':BinaryCrossEntropy,
-           'tanh':Tanh, 'sigmoid':Sigmoid}
+           'tanh':Tanh, 'sigmoid':Sigmoid, 'linear':Linear}

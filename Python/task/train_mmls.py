@@ -8,7 +8,7 @@ python ~/Projects/Itheano/Python/task/train_mmls.py --data-path=/opt/visal/tmp/f
 
 python ~/Projects/Itheano/Python/task/train_mmls.py --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_SP_t004_act_14 --num-epoch=200 --data-provider=mem --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_0009.cfg --testing-freq=1 --batch-size=1024 --train-range=0-132743 --test-range=132744-162007 --save-path=/opt/visal/tmp/for_sijin/tmp/tmp_theano --K-candidate=200 --K-most-violated=100 --max-num=20
 
-python ~/Projects/Itheano/Python/task/train_mmls.py --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_SP_t004_act_14 --num-epoch=200 --data-provider=mem --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_0009.cfg --testing-freq=1 --batch-size=1024 --train-range=0-132743 --test-range=132744-162007 --save-path=/opt/visal/tmp/for_sijin/tmp/tmp_theano_t --K-candidate=200 --K-most-violated=100 --max-num=20
+python ~/Projects/Itheano/Python/task/train_mmls.py --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_Raw_SP_t004_act_14 --num-epoch=200 --data-provider=mem --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_0014.cfg --testing-freq=1 --batch-size=1024 --train-range=0-132743 --test-range=132744-162007 --save-path=/opt/visal/tmp/for_sijin/tmp/tmp_theano_t --K-candidate=200 --K-most-violated=100 --max-num=20 --solver-type=mmls
 
 """
 from init_task import *

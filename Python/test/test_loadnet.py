@@ -1,6 +1,6 @@
 """
 Example:
-python ~/Projects/Itheano/Python/test/test_loadnet.py --load-file=/opt/visal/tmp/for_sijin/tmp/tmp_theano/ --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_SP_t004_act_14 --data-provider=mem --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_0009.cfg --testing-freq=1 --batch-size=1024 --train-range=0-132743 --test-range=132744-162007 --solver-type=mmls
+python ~/Projects/Itheano/Python/test/test_loadnet.py --load-file=/opt/visal/tmp/for_sijin/Data/saved/theano_models/SP_t004_act_14_0010 --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_SP_t004_act_14 --data-provider=mem --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_0010.cfg --testing-freq=1 --batch-size=1024 --train-range=0-132743 --test-range=132744-162007 --solver-type=mmls
 
 
 """
@@ -188,7 +188,8 @@ def show_bm_cmp(ndata, gt_target, mv_target, bm_targets, mv_score, gt_score,
                 bm_score, solver=None, save_path=None):
     mv_margin = MMLSSolver.calc_margin(gt_target - mv_target).flatten() * 1200
     bm_margin = MMLSSolver.calc_margin(gt_target - bm_targets).flatten() * 1200
-    save_path = '/public/sijinli2/ibuffer/2015-01-22/saved_batch_data_test_net4_K_rbf_correct_test'
+    save_path = '/public/sijinli2/ibuffer/2015-02-04/bm_cmp_SP_t004_act_14_graph_0010'
+    save_path = '/public/sijinli2/ibuffer/2015-02-09/bm_cmp_SP_t004_act_14_graph_0010'
 
     d = {'gt_target':gt_target, 'mv_target':mv_target, 'bm_target':bm_targets,
          'mv_score':mv_score, 'gt_score':gt_score, 'bm_score':bm_score
@@ -259,14 +260,15 @@ def show_what_is_best_all(train_dp, test_dp, solver):
     save_path = '/public/sijinli2/ibuffer/2015-01-16/best_match_act_14'
     mio.pickle(save_path, {'best_mpjpe':res})
 def main():
-    # solver_loader = MMSolverLoader()
-    # solver = solver_loader.parse()
-    # # solver.solver_params['candidate_mode'] =
+    solver_loader = MMSolverLoader()
+    solver = solver_loader.parse()
+    # solver.solver_params['candidate_mode'] =
     # solver.solver_params['K_candidate'] = 20000
-    # solver.solver_params['max_num'] = 2
-    # show_highest_score(train=False, solver=solver)
+    solver.solver_params['candidate_mode'] = 'all'
+    solver.solver_params['max_num'] = 1
+    show_highest_score(train=False, solver=solver)
     
-    show_bm_cmp_from_saved()
+    # show_bm_cmp_from_saved()
     # test_shared_weights()
     # return
     # save_again()
