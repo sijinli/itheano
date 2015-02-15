@@ -27,12 +27,11 @@ def show_highest_score(train, solver):
     """
    
     dp = solver.train_dp if train else solver.test_dp
-    
-    data = dp.get_next_batch()
-    ep, bn, alldata, ext_data  = solver.find_most_violated_ext(data,use_zero_margin=True,
+    data = solver.get_next_batch(train)
+    alldata, ext_data  = solver.find_most_violated_ext(data[2],use_zero_margin=True,
                                                                train=train
     )
-    print ep, bn, len(alldata)
+    print len(alldata)
     gt_target = alldata[0]
     gt_margin= alldata[4]
     img_features = alldata[1]
@@ -44,7 +43,8 @@ def show_highest_score(train, solver):
     # mv_margin = solver.calc_margin(gt_target - mv_target)
     mv_margin = alldata[5]
     print "mv shape {}, gt shape {}".format(mv_target.shape, gt_target.shape)
-    fl = solver.train_dp.data_dic['feature_list']
+
+    fl = solver.get_all_candidates(solver.train_dp)
     batch_candidate_targets = fl[0][...,batch_candidate_indexes]
     ndata = gt_target.shape[-1]
     data_to_eval = [solver.gpu_require(img_features.T),
@@ -189,7 +189,7 @@ def show_bm_cmp(ndata, gt_target, mv_target, bm_targets, mv_score, gt_score,
     mv_margin = MMLSSolver.calc_margin(gt_target - mv_target).flatten() * 1200
     bm_margin = MMLSSolver.calc_margin(gt_target - bm_targets).flatten() * 1200
     save_path = '/public/sijinli2/ibuffer/2015-02-04/bm_cmp_SP_t004_act_14_graph_0010'
-    save_path = '/public/sijinli2/ibuffer/2015-02-09/bm_cmp_SP_t004_act_14_graph_0010'
+    save_path = '/public/sijinli2/ibuffer/2015-02-14/bm_cmp_FCJ0_act_14_graph_0020_test_'
 
     d = {'gt_target':gt_target, 'mv_target':mv_target, 'bm_target':bm_targets,
          'mv_score':mv_score, 'gt_score':gt_score, 'bm_score':bm_score
@@ -260,17 +260,17 @@ def show_what_is_best_all(train_dp, test_dp, solver):
     save_path = '/public/sijinli2/ibuffer/2015-01-16/best_match_act_14'
     mio.pickle(save_path, {'best_mpjpe':res})
 def main():
-    solver_loader = MMSolverLoader()
+    solver_loader = MMLSSolverLoader()
     solver = solver_loader.parse()
     # solver.solver_params['candidate_mode'] =
-    # solver.solver_params['K_candidate'] = 20000
-    solver.solver_params['candidate_mode'] = 'all'
+    solver.solver_params['K_candidate'] = 20000
+    # solver.solver_params['candidate_mode'] = 'all'
     solver.solver_params['max_num'] = 1
     show_highest_score(train=False, solver=solver)
     
     # show_bm_cmp_from_saved()
     # test_shared_weights()
-    # return
+    # retuirn
     # save_again()
     # return
 

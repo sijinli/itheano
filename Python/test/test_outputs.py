@@ -35,16 +35,45 @@ def analyze_mmls_outputs(solver, output_layer_names):
         pl.hist(e.flatten(), bins=nbin)
         pl.title('Layer({})'.format(name))
     pl.show()
+
+def analyze_basicbp_outputs(solver, output_layer_names):
+    cur_data = solver.get_next_batch(train=True)
+    input_data = solver.prepare_data(cur_data[2])
+
+    output_layers = solver.net.get_layer_by_names(output_layer_names)
+    outputs= sum([e.outputs for e in output_layers],[])
+    f = theano.function(inputs=solver.net.inputs,
+                        outputs=outputs, on_unused_input='ignore')
+    res = f(*input_data)
+    max_col = 3
+    nbin=100
+    n_row = (len(res) - 1)//max_col + 1
+    idx = 0
+    for e,name in zip(res, output_layer_names):
+        idx = idx + 1
+        ndata = e.shape[0]
+        print 'Layer {} output {} nodes'.format(name, ndata)
+        iu.print_common_statistics(e)
+        pl.subplot(n_row, max_col, idx)
+        pl.hist(e.flatten(), bins=nbin)
+        pl.title('Layer({})'.format(name))
+    pl.show()
     
-    
-        
-def main():
+def test1():
     solver_loader = MMSolverLoader()
     solver= solver_loader.parse()
     
     output_layer_names = ['net1_fc0', 'net2_fc0', 'net1_fc1', 'net2_fc1', 'net1_fc2',
                           'net2_fc2', 'net2_fc2_dropout', 'net1_fc2_dropout']
     analyze_mmls_outputs(solver, output_layer_names)
+    
+def test2():
+    solver_loader = SolverLoader()
+    solver= solver_loader.parse()
+    layer_names = ['fc_j0', 'fc_j1', 'fc_j2', 'fc_ij0', 'fc_ij1', 'fc_ij2', 'pool2']
+    analyze_basicbp_outputs(solver, layer_names)
+def main():
+    test2()
 
 if __name__ == '__main__':
     main()

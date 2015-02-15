@@ -63,14 +63,18 @@ class GraphParser(object):
     def add_network_config(self, name, mcp):
         # Move to Network Parser latter
         net_config = {'layer_def_path':self.file_path}
+        default_config = {'dropout_layer_names': None, 'data_idx':None}
         for e in ['cost_layer_names', 'data_layer_names', 'output_layer_names',
-                  'layer_with_weights', 'dropout_layer_names']:
+                  'layer_with_weights', 'dropout_layer_names', 'data_idx']:
             if mcp.has_option(name, e):
-                t = mcp.safe_get_list(name, e)
-                net_config[e] = t if (len(t)>1 or t[0]!='') else []
+                if e in ['data_idx']:
+                    net_config[e] = mcp.safe_get_int_list(name, e)
+                else:
+                    t = mcp.safe_get_list(name, e)
+                    net_config[e] = t if (len(t)>1 or t[0]!='') else []
                 print '{}:\t{}\t{}'.format(name, e, net_config[e])
-            elif e == 'dropout_layer_names':
-                net_config[e] = None
+            elif e in default_config:
+                net_config[e] = default_config[e]
             else:
                 net_config[e] = []
         self.network_config[name] = net_config

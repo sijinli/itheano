@@ -7,6 +7,7 @@ import iread.myio as mio
 import pylab as pl
 import iutils as iu
 import options
+from time import time
 def get_cost(d, key, cost_name):
     if key in d['model_state']:
         l = d['model_state'][key]
@@ -24,7 +25,8 @@ def mark_peak_point(x,y,c):
 def get_sampling_index(op, n):
     max_num = 2000
     if n > 2000:
-        return range(0, n, 15)
+        step = n // 2000
+        return range(0, n, step)
     else:
         return range(n)
 def make_equal(x1,x2, freq):
@@ -46,9 +48,7 @@ def plot_cost(op, d, cost_name):
     if (len(train_error) != len(test_error) * testing_freq):
         print 'The length is not equal'
         train_error, test_error = make_equal(train_error, test_error, testing_freq)
-    
-    test_error = np.tile(np.array(test_error).reshape((1, len(test_error))), [testing_freq, 1])
-    test_error = test_error.flatten(order='F').tolist()
+    test_error = iu.concatenate_list([ [elem] * testing_freq for elem in test_error ])
     print 'Testing freq is {}'.format(testing_freq)
     
     ndata = len(train_error)
@@ -56,10 +56,17 @@ def plot_cost(op, d, cost_name):
     x_values = indexes
     y_train_error = [train_error[k] for k in indexes]
     y_test_error = [test_error[k] for k in indexes]
-
-    pl.plot(x_values, y_train_error,c='r', label='train')
-    mark_peak_point(range(ndata), train_error, 'r')
-    pl.plot(x_values, y_test_error, c='g', label='test')
+    if type(y_train_error[0]) is list or type(y_train_error[0]) is tuple:
+        n_elem = len(y_train_error[0])
+        for k in range(n_elem):
+            if k != 0:
+                break
+            pl.plot(x_values, [y[k] for y in y_train_error] ,c='r', label='train[%d]' % k)
+            pl.plot(x_values, [y[k] for y in y_test_error], c='g', label='test[%d]' % k)
+    else:
+        pl.plot(x_values, y_train_error,c='r', label='train')
+        # mark_peak_point(range(ndata), train_error, 'r')
+        pl.plot(x_values, y_test_error, c='g', label='test')
     pl.title(cost_name)
     pl.legend()
 def process(op):
@@ -75,9 +82,12 @@ def process(op):
     else:
         n_cost = len(d['solver_params']['train_error'][0])
         cost_names = d['solver_params']['train_error'][0].keys()
+    print 'Start to plot'
+    start_time = time()
     for i in range(n_cost):
         pl.subplot(n_cost, 1, i + 1)
         plot_cost(op, d, cost_names[i])
+    print 'Cost {} seconds '.format(time()- start_time)
     pl.show()
     
 def main():

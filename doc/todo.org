@@ -11,3 +11,4 @@
 ** TODO add mini-batch support for basicbp solver
 ** TODO How to do with layer with weights (Somethings I might forget to add them into the list when modifying the network architectures)
 ** TODO Maybe we can allow dropout layer to share the same mask?
+** 

@@ -11,10 +11,11 @@ def pack_01():
     input:   fc_j0 feature,  rel_pose
     outputs: rel_pose, fc_j0_feature
     """
+    source_feature_network_path = '/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_02_acm_act_14_exp_2_19_graph_0012/'
     source_meta_path = '/opt/visal/tmp/for_sijin/tmp/tmp_saved'
     
-    exp_meta_path = '/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_12_exp_4/batches.meta'
-    save_path = '/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_FCJ0_act_12'
+    exp_meta_path = '/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/batches.meta'
+    save_path = '/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_FCJ0_act_14'
     feature_name = 'Relative_Y3d_mono_body'
     res = dict()
     exp_meta = mio.unpickle(exp_meta_path)
@@ -31,13 +32,14 @@ def pack_01():
     res = {'feature_list': feature_list, 'feature_dim':feature_dim,
            'info':{'indexes':source_meta['info']['indexes'],
                    'max_depth': 1200.0}}
-    indexes = res['info']['indexes'] 
+    indexes = res['info']['indexes']
+    res['info']['soure_feature_network_path'] = source_feature_network_path
     print indexes[:10], min(indexes), max(indexes)
     print 'The number of data is {} == {}'.format(indexes.size, feature_list[0].shape[-1])
     iu.ensure_dir(save_path)
     mio.pickle(iu.fullfile(save_path, 'batches.meta'), res)
 def test():
-    d = mio.unpickle('/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_FCJ0_act_12/batches.meta')
+    d = mio.unpickle('/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_FCJ0_act_14/batches.meta')
     a = d['feature_list'][1]
     print a[...,0].flatten()
     iu.print_common_statistics(a)

@@ -23,7 +23,7 @@ from isolver_ext import *
 import sys
 
 def main():
-    mmlsloader = MMSolverLoader()
+    mmlsloader = MMLSSolverLoader()
     solver = mmlsloader.parse()
     solver.train()
 if __name__ == '__main__':

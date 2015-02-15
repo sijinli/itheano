@@ -622,7 +622,8 @@ class MaxMarginCostLayer(CostLayer):
         self.cost = relu_diff.sum() * theano.shared(np.cast[theano.config.floatX](self.coeff)) 
         self.param_dic['type'] = 'cost.maxmargin'
         self.set_output_names(self.param_dic['name'], self.outputs)
-        self.cost_list= [self.cost]
+        err = (relu_diff > 0).sum(acc_dtype=theano.config.floatX)/inputs[0].shape[0]
+        self.cost_list= [self.cost, err]
         
 class BinaryCrossEntropyCostLayer(CostLayer):
     """
@@ -644,6 +645,7 @@ class BinaryCrossEntropyCostLayer(CostLayer):
         self.param_dic['type'] = 'cost.binary_crossentropy'
                                                     
         self.set_output_names(self.param_dic['name'], self.outputs)
+                
         self.cost_list = [self.cost]
 class SquareDiffCostLayer(CostLayer):
     """
@@ -702,6 +704,8 @@ class Network(object):
         output_layers = self.get_layer_by_names(config_dic['output_layer_names'])
         if output_layers:
             self.outputs = sum([l.outputs for l in output_layers], [])
+        else:
+            self.outputs= []
         layer_with_weights = self.get_layer_by_names(config_dic['layer_with_weights'])
         if layer_with_weights:
             self.params = sum([l.params for l in layer_with_weights],[])
@@ -717,6 +721,7 @@ class Network(object):
             config_dic['dropout_layer_names'] = [lname for lname in layers if layers[lname][2].param_dic['type'] == 'dropout']
             # for lay in layers:
             #     print '{}:\t {}'.format(layer[2].name, layer[2].param_dic['type'])
+        self.data_idx = config_dic['data_idx'] if config_dic['data_idx'] else None
         print config_dic
         self.dropout_layers = self.get_layer_by_names(config_dic['dropout_layer_names'])
     def set_dropout_on(self, train=True):

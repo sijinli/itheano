@@ -1,5 +1,8 @@
 """
 This file defines some extra intialization methods
+Usage:
+initWfunc=initfunc.gwfp(/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_02_acm_act_14_exp_2_19_graph_0012/)
+initBfunc=initfunc.gbfp(/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_02_acm_act_14_exp_2_19_graph_0012/)
 """
 from init_src import *
 import numpy as np

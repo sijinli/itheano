@@ -1,3 +1,4 @@
+
 Note{
 DATE: Jan 16, 2015
 Network 2: The only difference between network 2 and network 1 is that I use different relu in the maxmargin layer. 
@@ -83,6 +84,7 @@ save_folder = /opt/visal/tmp/for_sijin/Data/saved/theano_models/
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/SP_t004_act_14_0010
 COMMENT: Dropout +  one more layer
 MPJPE: 86.3369
+
 }
 
 RUN {
@@ -90,17 +92,32 @@ Feb 2 2015
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_02_acm_act_14_exp_2_19_graph_0012/
 Eval@Feb4-2015-09:40AM: mean mpjpe = 79.672750975 epoch = 71
 Eval@Feb5-2015-09:44AM: mean mpjpe = 79.679860815 epoch = 120
+Eval@Feb11-2015-09:44AM: mean mpjpe =78.1785291767 epoch = 138
+
 
 Feb 3 2015
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/SP_t004_act_14_graph_0013/
 With smaller keep and number nodes, it still tends to overfit.
 MPJPE=87.11156 ( However, it is worse than previous performance) Random 20000
-MPJPE=80.8717975359 (random, epoch 70)
+MPJPE=80.8717975359 (ALL, epoch 70)
+MPJPE=79.692556 (KC=20000, epoch 79)
 }
 
 RUN {
 Feb 3 2015
 exp_name=Embedding_ASM_act_14_exp_2_ACCV_fc_j0
+}
+
+
+
+NOTE {
+exp_name=ASM_act_12_exp_4
+DP=croppedjt
+JT=0012
+EP=200
+BSIZE=128
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_04_ASM_act_12_exp_4_18_graph_0012
+mean mpjpe = 176.306504863
 }
 
 RUN {
@@ -144,6 +161,60 @@ TrainRange=0-109423
 TestRange=109424-148731
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_08_ASM_act_4_exp_5_18_graph_0012
 }
+
+NOTE{
+exp_name=FCJ0_act_14
+DP=mem
+macid=15
+JT=0016
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+TrainRange=0-132743
+TestRange=132744-162007
+test_freq=15
+save_name=2015_02_09_FCJ0_act_14_test
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_09_FCJ0_act_14_test
+mean mpjpe = 82.988910692
+}
+
+RUN {
+Feb 14 2015
+exp_name=ASM_act_15_exp_9
+DP=croppedjt
+macid=19
+JT=0012
+EP=200
+BSIZE=128
+run_mac=c8k$(macid)
+
+TrainRange=0-79411
+TestRange=79412-107715
+
+test_freq=15
+save_name=2015_02_14_$(exp_name)_$(macid)_graph_$(JT)
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_14_ASM_act_15_exp_9_19_graph_0012
+}
+
+RUN {
+exp_name=ASM_act_5_exp_10
+DP=croppedjt
+macid=17
+JT=0012
+EP=200
+BSIZE=128
+run_mac=c8k$(macid)
+
+TrainRange=0-72435
+TestRange=72436-103079
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_14_ASM_act_5_exp_10_17_graph_0012
+}
+
+NOTE {
+graph 0020 saved to 
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0020_test
+}
+
 
 
 
