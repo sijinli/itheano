@@ -79,10 +79,21 @@ class Linear(Activation):
             return self.a * X + self.b
         else:
             return X
+
+class Softmax(Activation):
+    """
+    softmax
+    """
+    def __init__(self, act_params= None):
+        self.name = 'softmax'
+    def __call__(self, X):
+        e_X = tensor.exp(X - X.max(axis=1, keepdims=True))
+        out = e_X / e_X.sum(axis=1, keepdims=True)
+        return out
 def make_actfunc(name, params):
     return act_dic[name](params)
 
 
 
 act_dic = {'relu':Relu, 'relu2':Relu2, 'abs':Abs, 'binary_crossentropy':BinaryCrossEntropy,
-           'tanh':Tanh, 'sigmoid':Sigmoid, 'linear':Linear}
+           'tanh':Tanh, 'sigmoid':Sigmoid, 'linear':Linear, 'softmax':Softmax}

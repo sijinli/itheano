@@ -70,7 +70,7 @@ def test1():
 def test2():
     solver_loader = SolverLoader()
     solver= solver_loader.parse()
-    layer_names = ['fc_j0', 'fc_j1', 'fc_j2', 'fc_ij0', 'fc_ij1', 'fc_ij2', 'pool2']
+    layer_names = ['fc_j0', 'fc_j1', 'fc_j2', 'fc_ij0', 'fc_ij1', 'fc_ij2', 'pool2', 'pool3','conv3_fuse']
     analyze_basicbp_outputs(solver, layer_names)
 def main():
     test2()

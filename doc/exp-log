@@ -147,8 +147,9 @@ BSIZE=128
 run_mac=c8k$(macid)
 TrainRange=0-158787
 TestRange=158788-223031
-/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_08_ASM-act_3_exp_8_14_graph_0012
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_08_ASM_act_3_exp_8_14_graph_0012
 COMMENTS:14 is macid
+mean mpjpe = 136.896386105
 
 exp_name=ASM_act_4_exp_5
 DP=croppedjt
@@ -160,6 +161,7 @@ run_mac=c8k$(macid)
 TrainRange=0-109423
 TestRange=109424-148731
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_08_ASM_act_4_exp_5_18_graph_0012
+mean mpjpe = 117.198643991
 }
 
 NOTE{
@@ -211,10 +213,211 @@ TestRange=72436-103079
 }
 
 NOTE {
-graph 0020 saved to 
+exp_name=FCJ0_act_14
+DP=mem
+macid=13
+JT=0020
+EP=200
+BSIZE=1024
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=100
+TrainRange=0-132743
+TestRange=132744-162007
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0020_test
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0022
+EP=200
+BSIZE=128
+un_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=DEBUG_TEST_0023
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/DEBUG_TEST_0022
+mean mpjpe = 77.4093566823  <------ On pose prediction part
+
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0023
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=DEBUG_TEST_0023
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/DEBUG_TEST_0023
+}
+
+Record{
+exp_name=FCJ0_act_14
+DP=mem
+macid=15
+JT=0018
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+TrainRange=0-132743
+TestRange=132744-162007
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_testbp
+mean mpjpe = 80.5595836496
+}
+
+RUN {
+exp_name=FCJ0_act_14
+DP=mem
+macid=15
+JT=0024
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+
+TrainRange=0-132743
+TestRange=132744-162007
+
+test_freq=15
+save_name=2015_02_17_FCJ0_act_14_again
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_17_FCJ0_act_14_again/
+mean mpjpe = 79.8749450703
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=14
+JT=0025
+EP=200
+BSIZE=128
+run_mac=c8k$(macid)
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+DATE=2015_02_17
+save_name=$(DATE)_$(exp_name)_graph_$(JT)
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_17_ASM_act_14_exp_2_graph_0025
+}
+
+RUN {
+exp_name=FCJ0_act_14
+DP=mem
+macid=15
+JT=0027_1
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+
+TrainRange=0-132743
+TestRange=132744-162007
+
+test_freq=1
+save_name=2015_02_28_FCJ0_act_14_cosine_test_1
+SP_NOTE=
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_02_28_FCJ0_act_14_cosine_test_1/
+}
+
+RUN {
+exp_name=FCJ0_act_14
+DP=mem
+macid=13
+JT=0028
+EP=200
+BSIZE=1024
+run_mac=c8k${macid}
+KC=200
+KMV=1000
+MAXNUM=100
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=${exp_name}_graph_${JT}_test_KMV_1000
+
+I was trying two versions. 
+##Now in processing
+In the first version, I use KMV=100, on c8k16 
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0028_test_
+[Random shuffled test, batch size 128, candidate 20000
+Residuals for best match poses 51.6047676782,
+mpjpe as mv_margin is 89.6173502302]
+[Use train as test, random batch, size = 128, candidate 20000
+Residuals for best match poses 16.9762548099
+mpjpe as mv_margin is 24.2432484224
+]
+
+in the second version I use KMV=1000 on c8k15
+
+}
+
+RUN {
+exp_name=FCJ0_act_14
+DP=mem
+macid=13
+JT=0029
+EP=200
+BSIZE=1024
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=100
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=${exp_name}_graph_${JT}_test_norm
+EXTRA=--force-shuffle=1
+/opt/visal/tmp/for_sijin/Data/saved/Test/FCJ0_act_14_graph_0029_test_norm/
+
+[--epoch 29@72
+Residuals for best match poses 16.8584867541
+mpjpe as mv_margin is 34.1280347539
+Residuals for best match poses 51.1792763669
+mpjpe as mv_margin is 87.8447293153 ]
+}
+
+RUN {
+exp_name=FCJ0_act_14
+DP=mem
+macid=13
+JT=0030
+EP=200
+BSIZE=1024
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=100
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=${exp_name}_graph_${JT}_test_norm
+EXTRA=--force-shuffle=1
+/opt/visal/tmp/for_sijin/Data/saved/Test/FCJ0_act_14_graph_0030_test_norm/
 }
 
 
 
+RUN {
+exp_name=FCJ0_act_14
+DP=mem
+macid=13
+JT=0029
+EP=200
+BSIZE=1024
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=100
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=${exp_name}_graph_${JT}_test_norm
+EXTRA=--force-shuffle=1 --cumulate-update
 
+}

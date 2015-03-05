@@ -19,4 +19,3 @@ class ImageMMSolverLoader(MMSolverLoader):
     def parse_solver_params(self, solver_params, op):
         MMSolverLoader.parse_solver_params(self, solver_params, op)
         solver_params['net_order'] = ['train_net', 'feature_net', 'score_net']
-        

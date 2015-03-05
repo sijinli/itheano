@@ -23,9 +23,11 @@ def mark_peak_point(x,y,c):
             pl.plot(x[i],y[i],marker='*', c=c)
         pre = y[i]
 def get_sampling_index(op, n):
-    max_num = 2000
-    if n > 2000:
-        step = n // 2000
+    if n > 6000:
+        return range(0, 6000)
+    max_num = 5000
+    if n > max_num:
+        step = n // max_num 
         return range(0, n, step)
     else:
         return range(n)

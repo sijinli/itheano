@@ -87,8 +87,8 @@ class LayerWithWeightsParser(LayerParser):
                     st = self.mcp.safe_get(self.name, e)
                     func, func_params = self.parse_external_func(st)
                     dic[e] = func
-            assert( len(dic['epsW']) == len(dic['wd']))
-            
+            if len(dic['epsW']) != len(dic['wd']):
+                raise LayerException('len (epsW) != len (wd)')
             if self.advanced_params:
                 for e in ['weights', 'biases', 'weights_inc', 'biases_inc']:
                     if e in self.advanced_params:
@@ -98,7 +98,7 @@ class LayerWithWeightsParser(LayerParser):
                                                                        len(dic['initW']),
                                                                        len(self.inputs)))
         except Exception as err:
-            print err,'LayerWithWeightsParser'
+            print err, 'LayerWithWeightsParser'
             sys.exit(1)
         assert(len(dic['initb']) == 1)
         return dic
@@ -254,6 +254,7 @@ class LayerWithWeightsLayer(Layer):
         return save_dic
     def get_regularizations(self):
         return sum([(W**2).sum() * decay for W, decay in zip(self.W_list, self.wd)])
+
 
 class DropoutParser(LayerParser):
     def parse_layer_params(self):
@@ -565,7 +566,77 @@ class ConvNetPool2dLayer(Layer):
         imgsize = input_dim[1]
         s = int(np.ceil(float(imgsize - sX) / stride)) + 1
         return (input_dim[0], s, s)
+        
+class NeuronParser(LayerParser):
+    def parse(self):
+        assert(len(self.inputs) == 1)
+        dic = self.parse_layer_params()
+        print 'Parse Layer {} \n \tComplete {}'.format(dic['name'],dic)
+        return NeuronLayer(self.inputs, dic)
+ 
+class NeuronLayer(Layer):
+    def __init__(self, inputs, param_dic):
+        Layer.__init__(self, inputs, param_dic)
+        self.required_field += ['actfunc']
+        self.parse_param_dic(param_dic)
+        self.outputs = [self.activation_func(self.inputs[0])]
+        self.set_output_names(self.param_dic['name'], self.outputs)
+        self.param_dic['type'] = 'neuron'
+        self.param_dic['output_dims'] = self.param_dic['input_dims']
+        
+class BatchNormParser(LayerParser):
+    def parse(self):
+        dic = self.parse_layer_params()
+        print 'Parse Layer {} \n \tComplete {}'.format(dic['name'],dic)
+        assert(len(self.inputs) == 1)
+        return BatchNormLayer(self.inputs, dic)
+    def parse_layer_params(self):
+        dic = LayerParser.parse_layer_params(self)
+        dic['epsilon'] = self.mcp.safe_get_float(self.name, 'epsilon', default=1e-6)
+        return dic
+class BatchNormLayer(Layer):
+    def __init__(self, inputs, param_dic):
+        Layer.__init__(self, inputs, param_dic)
+        self.required_field += ['epsilon']
+        self.parse_param_dic(param_dic)
+        m = inputs[0].mean(axis=0,keepdims=True)
+        centered_inputs = inputs[0] - m
+        var = (centered_inputs**2).mean(axis=0, keepdims=True) + param_dic['epsilon']
+        raw_outputs = centered_inputs/tensor.sqrt(var)
+        if self.activation_func:
+            self.outputs = [self.activation_func(raw_outputs)]
+        else:
+            self.outputs = [raw_outputs]
+        self.set_output_names(self.param_dic['name'], self.outputs)
+        self.param_dic['output_dims'] = self.param_dic['input_dims']
+        self.param_dic['type'] = 'batchnorm'
 
+class ElementwiseScaleParser(LayerWithWeightsParser):
+    def parse(self):
+        assert(len(self.inputs) == 1)
+        dic = LayerWithWeightsParser.parse_layer_params(self)
+        dic['output_dims'] = dic['input_dims']
+        print 'Parse Layer {} \n \tComplete {}'.format(dic['name'],dic)
+        return ElementwiseScaleLayer(self.inputs, dic)
+
+class ElementwiseScaleLayer(LayerWithWeightsLayer):
+    def __init__(self, inputs, param_dic):
+        LayerWithWeightsLayer.__init__(self, inputs, param_dic)
+        self.parse_param_dic(param_dic)
+        raw_outputs = self.W_list[0] * inputs[0] + self.b
+        if self.activation_func:
+            self.outputs = [self.activation_func(raw_outputs)]
+        else:
+            self.outputs = [raw_outputs]
+        self.set_output_names(self.param_dic['name'], self.outputs)
+        self.param_dic['output_dims'] = self.param_dic['input_dims']
+        self.param_dic['type'] = 'elemscale'
+
+    def get_w_shape(self, param_dic):
+        return [(np.prod(d),) for d in param_dic['input_dims']]
+    def get_b_shape(self, param_dic):
+        return (param_dic['input_dims'][0],)
+        
 class CostParser(LayerParser):
     def parse_layer_params(self):
         dic = LayerParser.parse_layer_params(self)
@@ -582,6 +653,9 @@ class CostLayer(Layer):
         self.eps_params = None                                                   
         Layer.__init__(self, inputs, param_dic)
         self.required_field += ['coeff']
+    def parse_param_dic(self, param_dic):
+        Layer.parse_param_dic(self, param_dic)
+        self.coeff = self.param_dic['coeff']
 
 class MaxMarginCostParser(CostParser):
     def parse(self):
@@ -598,7 +672,17 @@ class SquareDiffCostParser(CostParser):
         dic = self.parse_layer_params()
         assert(len(self.inputs) == 2)
         return SquareDiffCostLayer(self.inputs, dic)
-    
+class CosineCostParser(CostParser):
+    def parse_layer_params(self):
+        dic = CostParser.parse_layer_params(self)
+        dic['norm'] = self.mcp.safe_get_float(self.name, 'coeff', default=False)
+        if dic['norm']:
+            print 'Do normalization on inputs'
+        return dic
+    def parse(self):
+        dic = self.parse_layer_params()
+        assert(len(self.inputs) == 2)
+        return CosineCostLayer(self.inputs, dic)
 class MaxMarginCostLayer(CostLayer):
     """
     Here it will take two inputs and compare the difference of those two inputs
@@ -618,7 +702,6 @@ class MaxMarginCostLayer(CostLayer):
         diff = inputs[1] - inputs[0]
         relu_diff = self.activation_func(diff)
         self.outputs = [relu_diff]
-        self.coeff = self.param_dic['coeff']
         self.cost = relu_diff.sum() * theano.shared(np.cast[theano.config.floatX](self.coeff)) 
         self.param_dic['type'] = 'cost.maxmargin'
         self.set_output_names(self.param_dic['name'], self.outputs)
@@ -640,7 +723,7 @@ class BinaryCrossEntropyCostLayer(CostLayer):
             self.activation_func = make_actfunc(self.param_dic['actfunc']['name'],
                                                 self.param_dic['actfunc']['act_params'])
         self.outputs = [self.activation_func(inputs[1], inputs[0])]
-        self.coeff = self.param_dic['coeff']
+
         self.cost = self.outputs[0].sum() * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.binary_crossentropy'
                                                     
@@ -656,13 +739,35 @@ class SquareDiffCostLayer(CostLayer):
         CostLayer.__init__(self, inputs, param_dic)
         self.parse_param_dic(param_dic)
         self.outputs = [tensor.sqr(inputs[1] - inputs[0])]
-        self.coeff = self.param_dic['coeff']
         self.cost = self.outputs[0].sum() * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.sqdiff'
         self.set_output_names(self.param_dic['name'], self.outputs)
         self.cost_list = [self.cost]
-                                                    
-        
+class CosineCostLayer(CostLayer):
+    """
+    This cost layer will calculate
+       dot product of inputs[0] and inputs[1], d = <inputs[0], inputs[1]>
+    if norm is true, then it will be d/n1/n2
+    Please use negative coeff
+    """
+    def __init__(self, inputs, param_dic=None):
+        CostLayer.__init__(self, inputs, param_dic)
+        self.parse_param_dic(param_dic)
+        raw_outputs = (inputs[0] * inputs[1]).sum(axis=1, keepdims=True)
+        if param_dic['norm']:
+            n1 = tensor.sqrt((inputs[0]**2).sum(axis=1, keepdims=True))
+            n2 = tensor.sqrt((inputs[1]**2).sum(axis=1, keepdims=True))
+            tmp = n1 * n2
+            nf = theano.tensor.switch(tmp > 0, tmp, 1) 
+            self.outputs = [raw_outputs/nf]
+        else:
+            self.outputs = [raw_outputs]
+        if self.coeff > 0:
+            print 'Warn----: Use Positive CosineCostLayer\n\n----'
+        self.cost = self.outputs[0].sum() * theano.shared(np.cast[theano.config.floatX](self.coeff))
+        self.param_dic['type'] = 'cost.cosine'
+        self.set_output_names(self.param_dic['name'], self.outputs)
+        self.cost_list = [self.cost]
 class Network(object):
     """
     For the basic interface to the layers
@@ -756,5 +861,7 @@ class Network(object):
 layer_parser_dic={'fc':FCParser,'data':DataParser, 'cost.maxmargin':MaxMarginCostParser,
                   'cost.bce':BinaryCrossEntropyCostParser, 'cost.sqdiff':SquareDiffCostParser,
                   'eltsum':ElementwiseSumParser, 'conv':ConvParser, 'pool':PoolParser,
-                  'dropout':DropoutParser
+                  'dropout':DropoutParser, 'cost.cosine':CosineCostParser,
+                  'neuron':NeuronParser, 'batchnorm':BatchNormParser,
+                  'elemscale':ElementwiseScaleParser
 }

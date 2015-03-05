@@ -267,7 +267,6 @@ def main():
     # solver.solver_params['candidate_mode'] = 'all'
     solver.solver_params['max_num'] = 1
     show_highest_score(train=False, solver=solver)
-    
     # show_bm_cmp_from_saved()
     # test_shared_weights()
     # retuirn

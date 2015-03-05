@@ -1,6 +1,8 @@
 """
 
 python ~/Projects/Itheano/Python/task/eval_hmlpe.py --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2 --num-epoch=200 --data-provider=croppedjt --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_0008.cfg --testing-freq=15 --batch-size=256 --train-range=0-132743 --test-range=132744-162007 --save-path=/opt/visal/tmp/for_sijin/tmp/test_basic_bp --solver-type=evalhmlpe --load-file=/opt/visal/tmp/for_sijin/tmp/test_basic_bp
+
+python ~/Projects/Itheano/Python/task/eval_hmlpe.py --load-file=/opt/visal/tmp/for_sijin/Data/saved/Test/2015_02_28_FCJ0_act_14_cosine_test/ --solver-type=evalhmlpe --output_layer_name=fc_f1
 """
 from init_task import *
 import options

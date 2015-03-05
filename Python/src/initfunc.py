@@ -78,4 +78,50 @@ def gbfp(name, sp, params):
     layers = get_layers(model)
     lay = layers[layer_name][2]
     return lay['biases'][0]
-    
+def gwns(name, sp_list, params):
+    """
+    get weights for combining norm and scale layer
+    params[0] = model_folder
+    params[1] = norm layer name  [source]
+    params[2] = scale layer name [source]
+    """
+    model_folder, norm_name, scale_name = params[0], params[1], params[2]
+    stat_folder = iu.fullfile(model_folder, 'stat')
+    stat_path = Solver.get_saved_model_path(stat_folder)
+    stat = mio.unpickle(stat_path)
+    model  = Solver.get_saved_model(model_folder)
+    layers = get_layers(model)
+    W= layers[scale_name][2]['weights']
+    if 'epsilon' in layers[norm_name][2]: 
+        epsilon = layers[norm_name][2]['epsilon']
+    else:
+        epsilon = 1e-6
+    # u = stat['layers'][norm_name]['u'].flatten()
+    var = stat['layers'][norm_name]['var'].flatten()
+    return [W[0] / np.sqrt(var + epsilon)]
+def gbns(name,sp, params):
+    """
+    get bias for combining norm and scale layer
+    params[0] = model_folder
+    params[1] = norm layer name  [source]
+    params[2] = scale layer name [source]
+    """
+    model_folder, norm_name, scale_name = params[0], params[1], params[2]
+    stat_folder = iu.fullfile(model_folder, 'stat')
+    stat_path = Solver.get_saved_model_path(stat_folder)
+    stat = mio.unpickle(stat_path)
+    model  = Solver.get_saved_model(model_folder)
+    layers = get_layers(model)
+    W= layers[scale_name][2]['weights'][0]
+    b= layers[scale_name][2]['biases'][0]
+    print 'W-------------'
+    iu.print_common_statistics(W)
+    print 'b'
+    iu.print_common_statistics(b)
+    if 'epsilon' in layers[norm_name][2]: 
+        epsilon = layers[norm_name][2]['epsilon']
+    else:
+        epsilon = 1e-6
+    u = stat['layers'][norm_name]['u'].flatten()
+    var = stat['layers'][norm_name]['var'].flatten()
+    return b - W * u / (np.sqrt(var + epsilon))

@@ -41,6 +41,7 @@ class DataProvider(object):
             self.force_shuffle = params['force_shuffle']
         else:
             self.force_shuffle = False
+        print 'force_shuffle == {}'.format(self.force_shuffle)
     def advance_batch(self):
         self.epoch, self.batchnum = self.pre_advance_batch()
     def pre_advance_batch(self):
@@ -82,8 +83,8 @@ class MemoryDataProvider(DataProvider):
             indexes = self.shuffled_data_range[start:end] 
             batch_data += [[elem[..., indexes].reshape((-1,end-start),order='F')
                            for elem in self.data_dic['feature_list']]]
-            batch_indexes += [indexes]
-        self.batch_data, self.batch_indexes = batch_data, self.batch_indexes
+            batch_indexes.append(indexes)
+        self.batch_data, self.batch_indexes = batch_data, batch_indexes
     def get_batch(self, batchnum):
         return self.batch_data[batchnum]
     def get_batch_indexes(self, batchnum = None):
@@ -139,8 +140,9 @@ class CroppedImageDataWarper(DHMLPEDataWarper):
         self.required_attributes += ['data_path']
         self.parse_params(params)
         dp_params = {'fix_num_batch':True, 'crop_border':-1, 'crop_one_border':-1,
-                     'shuffle_data':train, 'batch_size':self.batch_size
+                     'shuffle_data':train or self.force_shuffle, 'batch_size':self.batch_size
         }
+        
         init_batchnum = self.batchnum * self.batch_size
         self.inner_dp = self.create_inner_dp(self.data_path, data_range, self.epoch,
                                              init_batchnum, dp_params, True)
@@ -224,7 +226,7 @@ class CroppedImageClassificationDataWarper(CroppedImageDataWarper):
         self.indlabels = self.cvtlabel2ind(self.labels, self.min_label, self.max_label,
                                            self.num_classes)
     def get_step(self):
-        return (self.max_label - self.min_label + 1) // self.num_classes + 1
+        return (self.max_label - self.min_label ) // self.num_classes + 1
     @classmethod
     def cvtlabel2ind(cls, labels, min_label, max_label, num_classes):
         nlabel = max_label - min_label + 1
