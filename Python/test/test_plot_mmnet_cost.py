@@ -8,6 +8,7 @@ import pylab as pl
 import iutils as iu
 import options
 from time import time
+import imgproc
 def get_cost(d, key, cost_name):
     if key in d['model_state']:
         l = d['model_state'][key]
@@ -23,8 +24,6 @@ def mark_peak_point(x,y,c):
             pl.plot(x[i],y[i],marker='*', c=c)
         pre = y[i]
 def get_sampling_index(op, n):
-    if n > 6000:
-        return range(0, 6000)
     max_num = 5000
     if n > max_num:
         step = n // max_num 
@@ -73,6 +72,7 @@ def plot_cost(op, d, cost_name):
     pl.legend()
 def process(op):
     data_folder = op.get_value('load_file')
+    save_path = op.get_value('save_path')
     # data_folder = '/public/sijinli2/ibuffer/2015-01-16/net2_test_for_stat_2000'
     all_files = iu.getfilelist(data_folder, '\d+@\d+$')
     print all_files
@@ -90,12 +90,15 @@ def process(op):
         pl.subplot(n_cost, 1, i + 1)
         plot_cost(op, d, cost_names[i])
     print 'Cost {} seconds '.format(time()- start_time)
+    if save_path:
+        imgproc.imsave_tight(save_path)
     pl.show()
     
 def main():
     op = options.OptionsParser()
     op.add_option('load-file', 'load_file', options.StringOptionParser, 'load file folder', default=None,excuses=options.OptionsParser.EXCLUDE_ALL)
     op.add_option('cost-name', 'cost_name', options.StringOptionParser, 'the cost name', default=None)
+    op.add_option('save-path', 'save_path', options.StringOptionParser, 'The path to save plot', default=None)
     op.parse()
     op.eval_expr_defaults()
     process(op)

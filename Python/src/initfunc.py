@@ -89,6 +89,7 @@ def gwns(name, sp_list, params):
     stat_folder = iu.fullfile(model_folder, 'stat')
     stat_path = Solver.get_saved_model_path(stat_folder)
     stat = mio.unpickle(stat_path)
+    print 'stat keys = {}'.format(stat['layers'].keys())
     model  = Solver.get_saved_model(model_folder)
     layers = get_layers(model)
     W= layers[scale_name][2]['weights']

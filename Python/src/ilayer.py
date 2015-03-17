@@ -75,7 +75,7 @@ class LayerWithWeightsParser(LayerParser):
             n = len(self.inputs)
             dic['initW'] = self.mcp.safe_get_float_list(self.name, 'initW',default=[0] * n)
             dic['initb'] = self.mcp.safe_get_float_list(self.name, 'initb',default=[0] * n)
-            dic['wd'] = self.mcp.safe_get_float_list(self.name, 'wd')
+            dic['wd'] = self.mcp.safe_get_float_list(self.name, 'wd', default=[0]*n)
             # epsW, epsB is the (relative) learning rate for weights and biases
             dic['epsW'] = self.mcp.safe_get_float_list(self.name, 'epsW', default=[1.0] * n)
             dic['epsB'] = self.mcp.safe_get_float_list(self.name, 'epsB', default= [1.0])
@@ -251,11 +251,101 @@ class LayerWithWeightsLayer(Layer):
         save_dic['biases_inc'] = [self.b_inc.get_value()]
         save_dic['epsW'] = [e.get_value() for e in self.epsW]
         save_dic['epsB'] = [e.get_value() for e in self.epsB]
+        # In priciple, momW.get_value() = self.param_dic['momW']
+        # save_dic['momW'] = [e.get_value() for e in self.momW] 
+        # save_dic['momB'] = [e.get_value() for e in self.momB]
         return save_dic
     def get_regularizations(self):
         return sum([(W**2).sum() * decay for W, decay in zip(self.W_list, self.wd)])
 
 
+class SlackVarParser(LayerWithWeightsParser):
+    def parse_layer_params(self):
+        dic = LayerParser.parse_layer_params(self)
+        self.mcp.check_options(self.name, ['initS'])
+        assert(len(self.inputs)==1)
+        n = 1
+        dic['initS'] = self.mcp.safe_get_float_list(self.name, 'initS', default=[0.0] * n)
+        dic['slacktype'] = self.mcp.safe_get(self.name, 'slacktype')
+        dic['coeff'] = self.mcp.safe_get_float_list(self.name, 'coeff', default=[1.0] * n)
+        dic['momS'] = self.mcp.safe_get_float_list(self.name, 'momS', default=[1.0] * n)
+        dic['epsS'] = self.mcp.safe_get_float_list(self.name, 'epsS', default=[1.0] * n)
+        dic['output_dims'] = dic['input_dims']
+        _slack_type_list = ['softrelu', 'exp']
+        if dic['slacktype'] not in _slack_type_list:
+            raise Exception('slacktype can only be one of {}'.format(_slack_type_list))
+        if self.advanced_params:
+            for e in ['slackvar']:
+                if e in self.advanced_params:
+                    dic[e] = self.advanced_params[e]
+        return dic
+    def parse(self):
+        dic = self.parse_layer_params()
+        print 'Parse Layer {} \n \tComplete {}'.format(dic['name'], dic)
+        return SlackVarLayer(self.inputs, dic)
+        
+class SlackVarLayer(LayerWithWeightsLayer):
+    def __init__(self, inputs, param_dic=None):
+        LayerWithWeightsLayer.__init__(self, inputs, param_dic)
+        field_to_remove = set(['epsW', 'momW', 'epsB', 'momB','wd'])
+        self.required_field += ['epsS','momS', 'coeff', 'slacktype','initS']
+        self.required_field = [e for e in self.required_field if e not in field_to_remove]
+        self.parse_param_dic(param_dic)
+        self.pos_slack  = None
+        if self.param_dic['slacktype'] == 'exp':
+            self.pos_slack = tensor.exp(self.s)
+        elif self.param_dic['slacktype'] == 'softrelu':
+            self.pos_slack = tensor.log(tensor.exp(self.s) + np.cast[theano.config.floatX](1))
+        lin_outputs = self.inputs[0] + self.pos_slack 
+        if self.activation_func:
+            raise Exception('are you sure what you are doing')
+            self.outputs = [self.activation_func(lin_outputs)]
+        else:
+            self.outputs = [lin_outputs]
+        self.set_output_names(self.param_dic['name'], self.outputs)
+        self.param_dic['type'] = 'slackvar'
+        self.cost = (self.pos_slack * self.coeff[0]).sum()
+        self.cost_list = [self.cost]
+    def copy_from_saved_layer(self, sl):
+        self.s.set_value(np.cast[theano.config.floatX](sl['slackvar'][0]))
+        print '{}: copy slackvar from {} layer successfully'.format(self.param_dic['name'], sl['name'])
+        if 'slackvar_inc' in sl:
+            self.s_inc.set_value(np.cast[theano.config.floatX](sl['slackvar_inc'][0]))
+    def inits_inc(self):
+        self.s_inc = theano.shared(np.cast[theano.config.floatX](self.s.get_value() * 0.0))
+        self.s_inc.name = '%s_slackvarinc_%d' % (self.param_dic['name'], 0)
+    def inits(self, param_dic):
+        s_value = np.cast[theano.config.floatX](param_dic['initS'][0])
+        self.s = theano.shared(s_value,borrow=False)
+        self.s.name = '%s_slackvar_%d' % (param_dic['name'], 0)
+    def parse_param_dic(self, param_dic):
+        Layer.parse_param_dic(self, param_dic)
+        if not 'slackvar' in param_dic:
+            self.inits(param_dic)
+            self.inits_inc()
+        else:
+            self.s = param_dic['slackvar']
+            self.s_inc = param_dic['slackvar_inc']
+            print '    Init slackvar from outside {}'.format(self.b.name)
+        self.coeff = self.cvt2sharedfloatX([self.param_dic['coeff']], '%s_coeff' % param_dic['name'])        
+        self.momS = self.cvt2sharedfloatX(self.param_dic['momS'], '%s_momS' % param_dic['name'])
+        self.epsS = self.cvt2sharedfloatX(self.param_dic['epsS'], '%s_epsS' % param_dic['name'])
+        
+        self.params = [self.s]
+        self.params_eps = self.epsS
+        self.params_inc = [self.s_inc]
+        self.params_mom = self.momS
+    def save_to_dic(self):
+        save_dic = self.param_dic.copy()
+        for e in ['slackvar', 'slackvar_inc']:
+            if e in save_dic:
+                del save_dic[e]
+        save_dic['slackvar'] = [self.s.get_value()]
+        save_dic['slackvar_inc'] = [self.s_inc.get_value()]
+        save_dic['epsS'] = [e.get_value() for e in self.epsS]
+        return save_dic
+    def get_regularizations(self):
+        return 0
 class DropoutParser(LayerParser):
     def parse_layer_params(self):
         dic = LayerParser.parse_layer_params(self)
@@ -702,11 +792,12 @@ class MaxMarginCostLayer(CostLayer):
         diff = inputs[1] - inputs[0]
         relu_diff = self.activation_func(diff)
         self.outputs = [relu_diff]
-        self.cost = relu_diff.sum() * theano.shared(np.cast[theano.config.floatX](self.coeff)) 
+        tot_mean = relu_diff.mean()
+        self.cost = tot_mean * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.maxmargin'
         self.set_output_names(self.param_dic['name'], self.outputs)
-        err = (relu_diff > 0).sum(acc_dtype=theano.config.floatX)/inputs[0].shape[0]
-        self.cost_list= [self.cost, err]
+        err = (relu_diff > 0).mean(acc_dtype=theano.config.floatX) * 1.0 
+        self.cost_list= [tot_mean, err]
         
 class BinaryCrossEntropyCostLayer(CostLayer):
     """
@@ -723,13 +814,12 @@ class BinaryCrossEntropyCostLayer(CostLayer):
             self.activation_func = make_actfunc(self.param_dic['actfunc']['name'],
                                                 self.param_dic['actfunc']['act_params'])
         self.outputs = [self.activation_func(inputs[1], inputs[0])]
-
-        self.cost = self.outputs[0].sum() * theano.shared(np.cast[theano.config.floatX](self.coeff))
+        tot_mean = self.outputs[0].mean()
+        self.cost = tot_mean * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.binary_crossentropy'
                                                     
         self.set_output_names(self.param_dic['name'], self.outputs)
-                
-        self.cost_list = [self.cost]
+        self.cost_list = [tot_mean]
 class SquareDiffCostLayer(CostLayer):
     """
     # the order doesn't matter in fact
@@ -739,17 +829,18 @@ class SquareDiffCostLayer(CostLayer):
         CostLayer.__init__(self, inputs, param_dic)
         self.parse_param_dic(param_dic)
         self.outputs = [tensor.sqr(inputs[1] - inputs[0])]
-        self.cost = self.outputs[0].sum() * theano.shared(np.cast[theano.config.floatX](self.coeff))
+        tot_mean = self.outputs[0].mean()
+        self.cost = tot_mean * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.sqdiff'
         self.set_output_names(self.param_dic['name'], self.outputs)
-        self.cost_list = [self.cost]
+        self.cost_list = [tot_mean]
 class CosineCostLayer(CostLayer):
     """
     This cost layer will calculate
        dot product of inputs[0] and inputs[1], d = <inputs[0], inputs[1]>
     if norm is true, then it will be d/n1/n2
     Please use negative coeff
-    """
+    """ 
     def __init__(self, inputs, param_dic=None):
         CostLayer.__init__(self, inputs, param_dic)
         self.parse_param_dic(param_dic)
@@ -764,10 +855,11 @@ class CosineCostLayer(CostLayer):
             self.outputs = [raw_outputs]
         if self.coeff > 0:
             print 'Warn----: Use Positive CosineCostLayer\n\n----'
-        self.cost = self.outputs[0].sum() * theano.shared(np.cast[theano.config.floatX](self.coeff))
+        tot_mean = self.outputs[0].mean()
+        self.cost = tot_mean * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.cosine'
         self.set_output_names(self.param_dic['name'], self.outputs)
-        self.cost_list = [self.cost]
+        self.cost_list = [tot_mean]
 class Network(object):
     """
     For the basic interface to the layers
@@ -863,5 +955,6 @@ layer_parser_dic={'fc':FCParser,'data':DataParser, 'cost.maxmargin':MaxMarginCos
                   'eltsum':ElementwiseSumParser, 'conv':ConvParser, 'pool':PoolParser,
                   'dropout':DropoutParser, 'cost.cosine':CosineCostParser,
                   'neuron':NeuronParser, 'batchnorm':BatchNormParser,
-                  'elemscale':ElementwiseScaleParser
+                  'elemscale':ElementwiseScaleParser,
+                  'slackvar':SlackVarParser
 }

@@ -220,9 +220,9 @@ class CroppedImageClassificationDataWarper(CroppedImageDataWarper):
     def __init__(self, data_dic, train, data_range, params):
         CroppedImageDataWarper.__init__(self, data_dic, train,data_range, params)
         self.labels = self.inner_dp.batch_meta['labels']
-        self.min_label = 20
+        self.min_label = 10
         self.max_label = 59
-        self.num_classes = 40
+        self.num_classes = 25
         self.indlabels = self.cvtlabel2ind(self.labels, self.min_label, self.max_label,
                                            self.num_classes)
     def get_step(self):

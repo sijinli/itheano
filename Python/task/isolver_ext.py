@@ -19,3 +19,7 @@ class ImageMMSolverLoader(MMSolverLoader):
     def parse_solver_params(self, solver_params, op):
         MMSolverLoader.parse_solver_params(self, solver_params, op)
         solver_params['net_order'] = ['train_net', 'feature_net', 'score_net']
+    def add_default_options(self, op):
+        MMSolverLoader.add_default_options(self, op)
+        op.add_option('opt-method', 'opt_method', options.StringOptionParser, 'the optimization methods [bp | ls]', default='bp')
+    

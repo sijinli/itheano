@@ -11,7 +11,7 @@ def show_the_most_violated_poses():
     from mpl_toolkits.mplot3d import Axes3D
     import imgproc
     saved_model_path = '/public/sijinli2/ibuffer/2015-01-16/net2_test_for_stat'
-    saved_model_path = '/opt/visal/tmp/for_sijin/Data/saved/Test/FCJ0_act_14_graph_0028_test_KMV_1000'
+    saved_model_path = '/opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0029_test_norm_cumulate_update'
     data_path = '/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_SP_t004_act_14/batches.meta'
     meta = mio.unpickle(data_path)
     all_pose = meta['feature_list'][0]
@@ -22,9 +22,9 @@ def show_the_most_violated_poses():
     ntrain = cnt_sample.size
 
     sorted_indexes = sorted(range(ntrain), key=lambda k: mvc[k], reverse=True)
-    show_num = int(100)
+    show_num = int(144)
     selected_indexes = sorted_indexes[:show_num]
-    max_show_row = int(8)
+    max_show_row = int(16)
     n_row = (show_num - 1)// max_show_row + 1
     nc = 0
     selected_pose = all_pose[:,selected_indexes]
@@ -47,7 +47,7 @@ def show_the_most_violated_poses():
     pl.show()
 def show_stat_most_violated_indexes():
     saved_model_path = '/public/sijinli2/ibuffer/2015-01-16/net2_test_for_stat'
-    saved_model_path = '/opt/visal/tmp/for_sijin/Data/saved/Test/FCJ0_act_14_graph_0028_test_KMV_1000'
+    saved_model_path = '/opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0029_test_norm_cumulate_update_eval/'
     ssolver = Solver.get_saved_model(saved_model_path)
     stat = ssolver['model_state']['stat']
     cnt_sample = stat['sample_candidate_counts']
@@ -99,8 +99,8 @@ def test_tmp():
     
 def main():
     # test_tmp()
-    show_stat_most_violated_indexes()
-    # show_the_most_violated_poses()
+    # show_stat_most_violated_indexes()
+    show_the_most_violated_poses()
 
 
 if __name__ == '__main__':

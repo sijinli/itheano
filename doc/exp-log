@@ -381,7 +381,11 @@ EXTRA=--force-shuffle=1
 Residuals for best match poses 16.8584867541
 mpjpe as mv_margin is 34.1280347539
 Residuals for best match poses 51.1792763669
-mpjpe as mv_margin is 87.8447293153 ]
+mpjpe as mv_margin is 87.8447293153 
+saved to /opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0029_test_norm_eval
+
+Overall, the mpjpe is 88.9815219668
+]
 }
 
 RUN {
@@ -419,5 +423,491 @@ TrainRange=0-132743
 TestRange=132744-162007
 save_name=${exp_name}_graph_${JT}_test_norm
 EXTRA=--force-shuffle=1 --cumulate-update
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0029_test_norm_cumulate_update/
+
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0029_test_norm_cumulate_update_eval/
+
+}
+
+
+Note {
+exp_name=exp
+DP=croppedimgcls
+macid=15
+JT=0032
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+
+TrainRange=0-12713
+TestRange=12714-25428
+# TrainRange=0-1023
+# TestRange=1023-2047
+# For Face++
+TrainRange=0-17719
+TestRange=17720-35440
+test_freq=3
+self.min_label = 20	
+self.max_label = 59
+self.num_classes = 40
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/Noah_face_Mar_6
+Direct eval
+7.8663732295%  data in [0, 1)
+40.4266124937%  data in [0, 5)
+77.1062581118%  data in [0, 10)
+98.7303199594%  data in [0, 20)
+
+--- With norm 
+8.00180576717%  data in [0, 1)
+40.2291067096%  data in [0, 5)
+77.0328988206%  data in [0, 10)
+98.5610292873%  data in [0, 20)
+}
+
+NOTE {
+exp_name=ASM_act_5_exp_10
+DP=croppedjt
+macid=17
+JT=0031
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+TrainRange=0-72435
+TestRange=72436-103079
+test_freq=15
+save_name=Calculon_2015_03_03_${exp_name}_norm_JT_${JT}
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/Calculon_2015_03_03_ASM_act_5_exp_10_norm_JT_0031
+mpjpe shape is (1, 128)
+cur_mean is 179.952109197
+Compute 239 batch 30592 data in total: 314.572048903 seconds 
+mean mpjpe = 139.616395895
+}
+
+NOTE {
+save evaluation of FCJ0_act_14_graph_0029_test_norm_eval
+to /public/sijinli2/ibuffer/2015-03-06/FCJ0_act_14_graph_0029_test_norm_eval/eval_mpjpe
+}
+
+NOTE{
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0034
+EP=200
+BSIZE=64
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_07_tune_0034
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+COMMENTS: The performance is not good.
+What is the problem?
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_07_tune_0034
+The saved version is the zero cost test version. 
+
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0035
+EP=200
+BSIZE=64
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_08_tune_0035
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_08_tune_0035
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0036
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_08_tune_0036
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_08_tune_0036
+COMMENTS: The performance on the training set is not good. 
+}
+
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0037
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_08_tune_0037
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_08_tune_0037/
+COMMENTS: The problem is that even on the training set, the performance is still not good.
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0038
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_09_tune_0038
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+COMMENT: In this version, I only add the cosine cost layer,.
+COMMENT: But I didnt' add the reconstruction cost
+COMMENT: Then the network will only force it to learn "similar" embedding
+COMMENT: It doesn't guarantee that the pose information is preserved.
+}
+
+NOTE {
+It is embarasing that 0034 versin is not correct. 
+I need to re-train 0034
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0034_corrected_version
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_10_0034_corrected_version
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_10_0034_corrected_version
+
+[random batch exp, K= 20000, random2
+Residuals for best match poses 52.2907453013
+mpjpe as mv_margin is 87.3639631471
+]
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0037_corrected_version
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_10_0037_corrected_version
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_10_0037_corrected_version/
+[Random batch exp , K = 20000, random2
+Residuals for best match poses 51.8139651997
+mpjpe as mv_margin is 87.441633381
+]
+}
+
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039
+EP=200
+BSIZE=256
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_12_0039_slack
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+Search_step_maximum = 1000
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_12_0039_slack/
+[random batch, 20000, 
+Residuals for best match poses 52.2288127382
+mpjpe as mv_margin is 88.8971149779
+]
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039_1
+EP=200
+BSIZE=512
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_13_0039_1_slack
+EXTRA='--cumulate-update-num=20 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+Search_step_maximum = 100
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_13_0039_1_slack/
+[15@207
+Residuals for best match poses 51.6113015437
+mpjpe as mv_margin is 92.7454818498
+]
+
+[
+epoch=37
+write to /public/sijinli2/ibuffer/2015-03-13/2015_03_13_0039_1_slack_epoch_37/
+Overall mpjpe is 91.211240498
+]
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039_2
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_13_0039_2_slack
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+search_step_maximum=1000
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_13_0039_2_slack/
+
+[13.770 random batch, 20000
+Residuals for best match poses 51.3779514205
+mpjpe as mv_margin is 90.7690030649
+]
+
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_12_0039_slack_again
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_12_0039_slack_again/
+All is the same. 
+However the training curve looks very different. 
+The relative learning rate is important here.  
+I think th emain problem here is the step size. 
+When terminated accidently, I change the step size, then the performance became bad.
+[16@686
+Residuals for best match poses 52.8039261488
+mpjpe as mv_margin is 90.5146398821
+]
+}
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039_3
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_13_0039_3_slack
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+Search_step_maximum = 1000
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_13_0039_3_slack/
+mpjpe as mv_margin is 96.789241189
+search_step_maximum = 100
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_13_0039_3_slack_100
+[Wow, it is too slow here]
+On epoch 79, the slack variable is stail 0.0259 ( * 1200, if for mpjpe explanation)
+
+}
+
+
+NOTE {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_12_0039_slack_again_100
+EXTRA='--cumulate-update-num=7 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_12_0039_slack_again_100/
+
+NOTE {
+epoch=25
+/public/sijinli2/ibuffer/2015-03-13/2015_03_12_0039_slack_again_100_epoch_25
+Overall mpjpe is 89.0587381611
+}
+
+NOTE {
+epoch 34 for training
+/public/sijinli2/ibuffer/2015-03-13/2015_03_12_0039_slack_again_100_epoch_34_train
+}
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039_4
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_12_0039_4_slack
+EXTRA='--cumulate-update-num=7 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_14_0039_4_slack/
+
+saved to 
+/public/sijinli2/ibuffer/2015-03-13/2015_03_14_0039_4_slack/
+
+
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039_5
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_14_0039_5_slack
+EXTRA='--cumulate-update-num=7 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_14_0039_5_slack/
+}
+
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0040
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_14_0040_slack
+EXTRA='--cumulate-update-num=7 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_14_0040_slack/
+
+[Epoch 29 
+saved to 
+/public/sijinli2/ibuffer/2015-03-13/2015_03_14_0040_slack_epoch_29
+Overall mpjpe is 90.7737477661
+]
+
+}
+
+NOTE {
+evaluation
+epoch=37
+/public/sijinli2/ibuffer/2015-03-13/2015_03_13_0039_1_slack_epoch_37/eval_mpjpe
+Overall mpjpe is 91.211240498
+}
+
+
+RUN {
+WARN:::::::
+:::THIS IS NOT FOR TRAINING::::::::
+:::I JUST WANT TO SEE WHETHER THE POOR PERFORMANCE IS CAUSED BY THE LACK OF TRAINING POSE:::
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0039
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_15_0039_slack_with_test_pose
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls --candidate-mode=testrandom'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_15_0039_slack_with_test_pose/
+
+COMMENTS: We didn't get improvement on the test set. It is weird.
+}
+
+
+RUN {
 
 }
