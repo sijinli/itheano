@@ -792,13 +792,18 @@ class MaxMarginCostLayer(CostLayer):
         diff = inputs[1] - inputs[0]
         relu_diff = self.activation_func(diff)
         self.outputs = [relu_diff]
-        tot_mean = relu_diff.mean()
+        tot_mean = relu_diff.sum(axis=1, keepdims=True).mean()
         self.cost = tot_mean * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.maxmargin'
         self.set_output_names(self.param_dic['name'], self.outputs)
-        err = (relu_diff > 0).mean(acc_dtype=theano.config.floatX) * 1.0 
+        err = (relu_diff.sum(axis=1,keepdims=True) > 0).mean(acc_dtype=theano.config.floatX) * 1.0 
         self.cost_list= [tot_mean, err]
-        
+    def parse_param_dic(self, param_dic):
+        CostLayer.parse_param_dic(self, param_dic)
+        self.param_dic['margin_dim'] = param_dic['input_dims'][0]
+        print """
+             The margin_dim is {}
+        """.format(self.param_dic['margin_dim'])
 class BinaryCrossEntropyCostLayer(CostLayer):
     """
     inputs=[ground_truth label, prediction]

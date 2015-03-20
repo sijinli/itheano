@@ -909,5 +909,156 @@ COMMENTS: We didn't get improvement on the test set. It is weird.
 
 
 RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0041
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_17_0041_test
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_17_0041_test/
+INPROCESS_________________________________________________
+saved eva to /public/sijinli2/ibuffer/2015-03-13/2015_03_17_0041_test
+}
 
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0042
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_17_0042_test
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_17_0042_test
+
+saved eva to /public/sijinli2/ibuffer/2015-03-13/2015_03_17_0042_test
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0043
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_17_0043_test
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls --margin-func=jpe'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_17_0043_test
+
+[random2, 20000
+91.2335426484
+]
+
+}
+
+
+RUN {
+
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0041
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_17_0041_test_exp_mpjpe
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls --margin-func=exp_mpjpe'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+COMMENTS: 
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_17_0041_test_exp_mpjpe/0@19
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0042_1
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_19_0042_1_test
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_19_0042_1_test
+COMMENTS: Try larger coeff for mmcost
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0044
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_19_0044_test
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_19_0044_test/
+
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0046
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_20_0046_test
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls --margin-func=jpe'
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_20_0046_test/
+
+}
+
+
+NOTE{
+After this point, all the default candidate_mode will be set to 
+random2
 }
