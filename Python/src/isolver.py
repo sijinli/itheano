@@ -336,7 +336,7 @@ class MMSolver(Solver):
     """
     Abstract class for maximum margin solver
     """
-    _default_list = [('candidate_mode', 'random'),
+    _default_list = [('candidate_mode', 'random2'),
                      ('cumulate_update_num', -1)] + Solver._default_list
     _required_field = ['K_candidate', 'max_num', 'K_most_violated', 'candidate_mode',
                        'margin_func', 'cumulate_update_num'] + Solver._required_field
@@ -358,7 +358,10 @@ class MMSolver(Solver):
             K_candidate = self.solver_params['K_candidate']
             indexes = np.concatenate([np.random.choice(range(0, n_train), size=K_candidate) for k in range(ndata)])
         elif candidate_mode == 'testrandom':
-            print 'Only used to check the performance on test samples\n Should not be used for normal training or testing \n \n !!!!!!!!!!!!!!\n\n Even for testing, Ensure train test continuous'
+            print '''
+            Only used to check the performance on test samples\n Should not be used for normal
+            training or testing \n \n !!!!!!!!!!!!!!\n\n Even for testing, Ensure train test continuous
+            '''
             K_candidate = self.solver_params['K_candidate']
             n_all = len(self.train_dp.data_range) + len(self.test_dp.data_range)
             indexes = np.random.randint(low=0, high=n_all, size = K_candidate * ndata)
@@ -370,19 +373,19 @@ class MMSolver(Solver):
         Here will analyze the number of support vector
         """
         res = self.train_forward_func(*alldata)[0]
-        act_ind = res > 0
+        act_ind = res.sum(axis=1,keepdims=True) > 0
         return res, act_ind
     def analyze_num_sv(self, alldata):
         """
         Here will analyze the number of support vector
         """
         res, act_ind = self.analyze_num_sv_ext(alldata)
-        ntot= res.size
+        ntot= act_ind.size
         nsv = ntot - np.sum(act_ind.flatten())
         iu.print_common_statistics(res)
         print '{}[{}]:\t mm-cost {} #correct {} [{:.2f}%]'.format(res.dtype,
-                                                                 res.shape, res.sum(),
-                                                                 nsv, nsv * 100.0/ntot)
+                                                                  res.shape,
+                                                                  res.sum(axis=1,keepdims=True).mean(), nsv, nsv * 100.0/ntot)
     @classmethod
     def add_holdon_candidates(cls, candidate_indexes, holdon_indexes, num):
         if holdon_indexes.size == 0:
@@ -392,11 +395,12 @@ class MMSolver(Solver):
                             holdon_indexes_ext],axis=0)
         return t.flatten(order='F')
     @classmethod
-    def zero_margin(cls, residuals):
+    def zero_margin(cls, residuals, margin_dim=1):
         ndata = residuals.shape[-1]
-        return np.zeros((1,ndata))
+        return np.zeros((margin_dim, ndata))
     def make_margin_func(self, func_name, func_params):
         """
+        Any valid margin function should satisfy \Delta(y,y) = 0   
         """
         if func_name == 'rbf':
             print '    use rbf as margin'
@@ -404,6 +408,10 @@ class MMSolver(Solver):
             return lambda X: 1 - dutils.calc_RBF_score(X, sigma, group_size=3)
         elif func_name == 'mpjpe':
             return lambda X: dutils.calc_mpjpe_from_residual(X, num_joints=17)
+        elif func_name == 'jpe':
+            return lambda X: dutils.calc_jpe_from_residual(X, num_joints=17)
+        elif func_name == 'exp_mpjpe':
+            return lambda X: np.exp(dutils.calc_mpjpe_from_residual(X, num_joints=17)) - 1
         else:
             raise Exception('Unsupported margin type {}'.format(func_name))
     def parse_params(self, solver_params):
@@ -453,6 +461,7 @@ class MMLSSolver(MMSolver):
         flayer_name = 'net2_mmcost'
         self.train_forward_func = theano.function(inputs=self.train_net.inputs,
                                                   outputs=self.train_net.layers[flayer_name][2].outputs)
+        self.margin_dim = self.train_net.layers[flayer_name][2].param_dic['margin_dim']
         # For debug usage
         self.stat = dict()
         n_train = len(self.train_dp.data_range)
@@ -521,7 +530,7 @@ class MMLSSolver(MMSolver):
         self.eval_net.set_train_mode(train=False) # Always use the test mode for searching
         K_mv = self.solver_params['K_most_violated']
         max_num = int(self.solver_params['max_num'])
-        calc_margin = (lambda R:self.zero_margin(R)) if use_zero_margin else self.margin_func
+        calc_margin = (lambda R:self.zero_margin(R, self.margin_dim)) if use_zero_margin else self.margin_func
         train_dp =  self.train_dp
         n_train = len(train_dp.data_range)
         ndata = data[0].shape[-1] 
@@ -570,7 +579,7 @@ class MMLSSolver(MMSolver):
         print 'data len ={}<<<<'.format(len(data))
         # mv_margin = self.calc_margin(gt - most_violated_targets)
         mv_margin = calc_margin(gt - most_violated_targets)
-        gt_margin = np.zeros((1, ndata), dtype=np.single)
+        gt_margin = np.zeros((self.margin_dim, ndata), dtype=np.single)
         alldata = [data[0], data[1], data[2],
                    most_violated_features, gt_margin, mv_margin]
         # extra information
@@ -606,6 +615,7 @@ class MMLSSolver(MMSolver):
                 print 'Cumulate update'
                 for ct in range(cumulate_update_num):
                     print '[{}]:------'.format(ct)
+                    self.epoch, self.batchnum = cur_data[0], cur_data[1]
                     self.print_iteration()
                     compute_time_py = time()
                     most_violated_data = self.find_most_violated(cur_data[2], train=True)
@@ -613,16 +623,16 @@ class MMLSSolver(MMSolver):
                     print 'Searching the most violated cost %.3f sec' % (time() - compute_time_py)
                     res, act_ind = self.analyze_num_sv_ext(tmp_data)
                     nsv = np.sum(act_ind.flatten())
-                    print 'support vector {} of {}:\t{}%\t mmcost={}'.format(nsv, res.size,
-                                                                             nsv * 100.0/res.size, res.mean())
+                    print 'support vector {} of {}:\t{}%\t mmcost={}'.format(nsv, act_ind.size,
+                                                                             nsv * 100.0/act_ind.size, res.mean())
                     last_mv_data = tmp_data
                     nsv_cum += nsv
                     if nsv:
                         data_list.append(self.collect_sv(act_ind, tmp_data))
                     if nsv_cum >= tmp_data[0].shape[0]:
                         break
-                    self.epoch, self.batchnum = self.pre_advance_batch(train=True)
-                    if self.epoch  == self.num_epoch: 
+                    next_epoch, next_batchnum = self.train_dp.epoch, self.train_dp.batchnum
+                    if next_epoch  == self.num_epoch: 
                         break
                     if ct != cumulate_update_num - 1:
                         cur_data = self.get_next_batch(train=True)
@@ -683,7 +693,7 @@ class MMLSSolver(MMSolver):
             if save_batch_idx > pre_batch_done:
                 self.save_model()
             pre_batch_done = cur_batch_done
-            self.epoch,self.batchnum = self.pre_advance_batch(train=True)
+            self.epoch, self.batchnum = self.train_dp.epoch, self.train_dp.batchnum
             if self.epoch  == self.num_epoch: 
                 break
             cur_data = self.get_next_batch(train=True)
@@ -876,6 +886,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         self.net_obj_list = net_obj_list
         self.lr = theano.shared(np.cast[theano.config.floatX](1.0))
         self.grads = tensor.grad(self.train_net.costs[0], self.train_net.params)
+
         self.opt_method = self.solver_params['opt_method']
         if self.opt_method == 'bp':
             p_inc_new = [p_inc * mom - (self.lr * eps) * g for p_inc, mom, eps, g in
@@ -913,6 +924,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         flayer_name = 'net2_mmcost'
         self.train_forward_func = theano.function(inputs=self.train_net.inputs,
                                                   outputs=self.train_net.layers[flayer_name][2].outputs)
+        self.margin_dim = self.train_net.layers[flayer_name][2].param_dic['margin_dim']
         self.data_idx = self.train_net.data_idx
         self.stat = dict()
         n_train = len(self.train_dp.data_range)
@@ -945,7 +957,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         self.set_train_mode(False)  # Always use test mode for searching
         K_mv = self.solver_params['K_most_violated']
         max_num = int(self.solver_params['max_num'])
-        calc_margin = (lambda R:self.zero_margin(R)) if use_zero_margin else self.margin_func
+        calc_margin = (lambda R:self.zero_margin(R, self.margin_dim)) if use_zero_margin else self.margin_func
         
         dp =  self.train_dp
         n_train = len(dp.data_range)
@@ -1000,7 +1012,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         gt = fdata[1]
         # mv_margin = self.calc_margin(gt - most_violated_targets)
         mv_margin = calc_margin(gt - most_violated_targets)
-        gt_margin = np.zeros((1, ndata), dtype=np.single)
+        gt_margin = np.zeros((self.margin_dim, ndata), dtype=np.single)
         alldata = [fdata[0], fdata[1], most_violated_targets, gt_margin, mv_margin]
         # extra information
         all_candidate_indexes_arr = np.concatenate(all_candidate_indexes)
@@ -1053,6 +1065,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                 last_mv_data = None
                 for ct in range(cumulate_update_num):
                     print '[{}]:------'.format(ct)
+                    self.epoch, self.batchnum = cur_data[0], cur_data[1]
                     self.print_iteration()
                     compute_time_pyt = time()
                     input_data = self.prepare_data(cur_data[2])
@@ -1063,16 +1076,16 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                     mini_mv_input_data[0] = input_data[0]
                     res, act_ind = self.analyze_num_sv_ext(mini_mv_input_data)
                     nsv = np.sum(act_ind.flatten())
-                    print 'support vector {} of {}:\t{}%\t mmcost={}'.format(nsv, res.size,
-                                                                             nsv * 100.0/res.size, res.mean())
+                    print 'support vector {} of {}:\t{}%\t mmcost={}'.format(nsv, act_ind.size,
+                                                                             nsv * 100.0/act_ind.size, res.mean())
                     last_mv_data = mini_mv_input_data
                     nsv_cum += nsv
                     if nsv:
                         data_list.append(self.collect_sv(act_ind, mini_mv_input_data))
                     if nsv_cum >=mini_mv_input_data[0].shape[0]:
                         break
-                    self.epoch, self.batchnum = self.pre_advance_batch(train=True)
-                    if self.epoch == self.num_epoch:
+                    next_epoch, next_batchnum = self.train_dp.epoch, self.train_dp.batchnum
+                    if next_epoch == self.num_epoch:
                         break
                     if ct != cumulate_update_num - 1:
                         cur_data = self.get_next_batch(train=True)
@@ -1081,6 +1094,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                 else:
                     mv_input_data = self.concatenate_data(data_list)
             else:
+                self.epoch, self.batchnum = cur_data[0], cur_data[1]
                 self.print_iteration()
                 input_data = self.prepare_data(cur_data[2]) 
                 imgfeatures = self.calc_image_features([input_data[0]])
