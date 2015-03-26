@@ -572,10 +572,19 @@ class MMLSSolver(MMSolver):
         
         self.eval_net.set_train_mode(train=False) # Always use the test mode for searching
         K_mv = self.solver_params['K_most_violated']
-        K_update = self.solver_params['K_top_update']
+        if train:
+            K_update = self.solver_params['K_top_update']
+        else:
+            K_update = 1
         max_num = int(self.solver_params['max_num'])
         calc_margin = (lambda R:self.zero_margin(R, self.margin_dim)) if use_zero_margin else self.margin_func
         train_dp =  self.train_dp
+        if (self.candidate_feat_E is not None) and train:
+            # need to ensure it has max_depth
+            feat_E = self.candidate_feat_E / train_dp.max_depth
+        else:
+            feat_E = None
+            
         n_train = len(train_dp.data_range)
         ndata = data[0].shape[-1] 
         num_mini_batch = (ndata - 1) / max_num  + 1
@@ -605,6 +614,12 @@ class MMLSSolver(MMSolver):
             imgfeatures = np.tile(data[1][..., start:end], [K_tot, 1]).reshape((-1, K_tot * cur_num ), order='F')
             # margin = self.calc_margin(gt_target - candidate_targets)
             margin = calc_margin(gt_target - candidate_targets)
+
+            ##@ adding noise
+            if feat_E is not None:
+                dim_X = candidate_targets.shape[0]
+                candidate_targets = candidate_targets + np.dot(feat_E, np.random.randn(dim_X, candidate_targets.shape[-1]))                
+            # #
             alldata = [self.gpu_require(imgfeatures.T),
                        self.gpu_require(candidate_features.T),
                        self.gpu_require(margin.T)]
@@ -1020,7 +1035,10 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         """
         self.set_train_mode(False)  # Always use test mode for searching       
         K_mv = self.solver_params['K_most_violated']
-        K_update = self.solver_params['K_top_update']
+        if train:
+            K_update = self.solver_params['K_top_update']
+        else:
+            K_update = 1
         max_num = int(self.solver_params['max_num'])
         calc_margin = (lambda R:self.zero_margin(R, self.margin_dim)) if use_zero_margin else self.margin_func
         
@@ -1067,7 +1085,6 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
             if feat_E is not None:
                 dim_X = candidate_targets.shape[0]
                 tmp = candidate_targets + np.dot(feat_E, np.random.randn(dim_X, candidate_targets.shape[-1]))
-                mpjpe_test = dutils.calc_mpjpe_from_residual(candidate_targets - tmp,17)
                 candidate_targets = tmp
                 # print '\n\n---- mpjpe test {}----\n\n'.format(np.mean(mpjpe_test.flatten()))
             # #

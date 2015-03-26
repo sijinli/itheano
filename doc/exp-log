@@ -1225,6 +1225,12 @@ EXTRA='--cumulate-update=3 --force-shuffle=1 --opt-method=ls --K-top-update=3'
 TF=1
 
 /opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_24_0042_topK3update/
+
+[13@996
+Residuals for best match poses 51.3639987012
+mpjpe as mv_margin is 88.2353075674
+]
+
 }
 
 RUN {
@@ -1240,9 +1246,33 @@ KMV=10
 MAXNUM=10
 TrainRange=0-132743
 TestRange=132744-162007
-save_name=2015_03_24_0042_topK3update_c1
+save_name=2015_03_24_0042_topK8update_c1
 EXTRA='--force-shuffle=1 --opt-method=ls --K-top-update=8'
 TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_24_0042_topK8update_c1
+
+[random batch exp 2@368
+Residuals for best match poses 52.1980601288
+mpjpe as mv_margin is 93.1146696535
+]
 }
 
 
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0042
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_26_0042_pca_noise_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-feat-pca-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/rel_pca.meta --candidate-feat-pca-noise=0.0003'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_26_0042_pca_noise_test/
+}
