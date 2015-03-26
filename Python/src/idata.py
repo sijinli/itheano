@@ -158,9 +158,11 @@ class CroppedImageDataWarper(DHMLPEDataWarper):
         self.inner_dp.cropped_mean_image = self.inner_dp.mean_image.copy()
         self.inner_dp.cropped_mean_image[:] =0
         self.data_buffer = dict()
+        self.data_indexes = dict()
         self.num_batch = self.inner_dp.num_batch
         assert( self.num_batch == (len(data_range) - 1) // self.batch_size + 1)
         self.offset_r, self.offset_c = None, None
+        self.cur_batch_indexes = None
     def parse_params(self, params):
         DHMLPEDataWarper.parse_params(self, params)
         self.safe_add_params('with_buffer', params, True)
@@ -168,7 +170,7 @@ class CroppedImageDataWarper(DHMLPEDataWarper):
         DHMLPEDataWarper.reset(self)
         self.inner_dp.reset()
     def get_batch_indexes(self, batchnum=None):
-        return self.inner_dp.data_dic['cur_batch_indexes']
+        return self.cur_batch_indexes
     def get_plottable_data(self, imagedata):
         ndata = imagedata.shape[-1]
         dims = self.input_image_dim.tolist() + [ndata]
@@ -187,6 +189,9 @@ class CroppedImageDataWarper(DHMLPEDataWarper):
     def get_next_batch(self):
         return None
 class CroppedDHMLPEJointDataWarper(CroppedImageDataWarper):
+    def __init__(self, data_dic, train, data_range, params):
+        CroppedImageDataWarper.__init__(self, data_dic,train, data_range, params)
+        self.max_depth = self.inner_dp.max_depth
     def create_inner_dp(self, data_path, data_range, epoch, init_batchnum, dp_params, test):
         return self.dhmlpe_convdata.CroppedDHMLPEJointDataProvider(data_path,
                                                                    data_range,
@@ -198,9 +203,12 @@ class CroppedDHMLPEJointDataWarper(CroppedImageDataWarper):
         epoch, batchnum = self.epoch, self.batchnum
         if batchnum in self.data_buffer:
             alldata = self.data_buffer[batchnum]
+            self.cur_batch_indexes = self.data_indexes[self.batchnum]
         else:
             dummy1, dummy2, alldata = self.inner_dp.get_next_batch()
             self.data_buffer[self.batchnum] = alldata
+            self.data_indexes[self.batchnum] = self.inner_dp.data_dic['cur_batch_indexes']
+            self.cur_batch_indexes = self.inner_dp.data_dic['cur_batch_indexes']
         offset_r, offset_c, cropped_images = self.crop_image(alldata[0])
         self.cur_offset_r = offset_r
         self.cur_offset_c = offset_c
@@ -238,15 +246,18 @@ class CroppedImageClassificationDataWarper(CroppedImageDataWarper):
         epoch, batchnum = self.epoch, self.batchnum
         if batchnum in self.data_buffer:
             alldata = self.data_buffer[batchnum]
+            self.cur_batch_indexes = self.data_indexes[batchnum]
         else:
             dummy1, dummy2, alldata = self.inner_dp.get_next_batch()
             assert(len(alldata) == 1)
-            cur_indexes = self.get_batch_indexes(self)
+            cur_indexes = self.inner_dp.data_dic['cur_batch_indexes']
             labels = self.labels[..., cur_indexes]
             indlabels = self.indlabels[..., cur_indexes]
             alldata.append(labels)
             alldata.append(indlabels)
             self.data_buffer[batchnum] = alldata
+            self.data_indexes[batchnum] = cur_indexes
+            self.cur_batch_indexes = cur_indexes
         offset_r, offset_c, cropped_images = self.crop_image(alldata[0])
         self.cur_offset_r = offset_r
         self.cur_offset_c = offset_c

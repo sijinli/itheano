@@ -436,7 +436,7 @@ class ElementwiseSumLayer(Layer):
             self.outputs = [self.activation_func(e) for e in raw_outputs]
         else:
             self.outputs = raw_outputs
-        self.param_dic['type'] = 'fc'
+        self.param_dic['type'] = 'eltsum'
         self.param_dic['output_dims'] = [param_dic['input_dims'][0]]
         for idx,e in enumerate(self.outputs):
             e.name = self.get_var_name(self.param_dic['name'], 'outputs[{}]'.format(idx))
@@ -819,7 +819,7 @@ class BinaryCrossEntropyCostLayer(CostLayer):
             self.activation_func = make_actfunc(self.param_dic['actfunc']['name'],
                                                 self.param_dic['actfunc']['act_params'])
         self.outputs = [self.activation_func(inputs[1], inputs[0])]
-        tot_mean = self.outputs[0].mean()
+        tot_mean = self.outputs[0].sum(axis=1,keepdims=True).mean() 
         self.cost = tot_mean * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.binary_crossentropy'
                                                     
@@ -834,7 +834,7 @@ class SquareDiffCostLayer(CostLayer):
         CostLayer.__init__(self, inputs, param_dic)
         self.parse_param_dic(param_dic)
         self.outputs = [tensor.sqr(inputs[1] - inputs[0])]
-        tot_mean = self.outputs[0].mean()
+        tot_mean = self.outputs[0].sum(axis=1,keepdims=True).mean() 
         self.cost = tot_mean * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.sqdiff'
         self.set_output_names(self.param_dic['name'], self.outputs)
@@ -860,7 +860,7 @@ class CosineCostLayer(CostLayer):
             self.outputs = [raw_outputs]
         if self.coeff > 0:
             print 'Warn----: Use Positive CosineCostLayer\n\n----'
-        tot_mean = self.outputs[0].mean()
+        tot_mean = self.outputs[0].sum(axis=1,keepdims=True).mean() 
         self.cost = tot_mean * theano.shared(np.cast[theano.config.floatX](self.coeff))
         self.param_dic['type'] = 'cost.cosine'
         self.set_output_names(self.param_dic['name'], self.outputs)

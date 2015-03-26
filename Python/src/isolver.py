@@ -171,10 +171,13 @@ class MMSolverLoader(SolverLoader):
         SolverLoader.add_default_options(self, op)
         op.add_option('K-candidate', 'K_candidate', options.IntegerOptionParser, 'the number of candidate', default=None)
         op.add_option('K-most-violated', 'K_most_violated', options.IntegerOptionParser, 'the size of the hold-on set', default=None)
+        op.add_option('K-top-update', 'K_top_update', options.IntegerOptionParser, 'Using the top K most violoated candidate for updating the cost', default=1)
         op.add_option('max-num', 'max_num', options.IntegerOptionParser, 'The maximum number of sample to be processed')
         op.add_option('margin-func', 'margin_func', options.StringOptionParser, 'the parameters for marginl', default='mpjpe')
         op.add_option('candidate-mode', 'candidate_mode', options.StringOptionParser, 'the parameters for marginl', default='random')
         op.add_option('cumulate-update-num', 'cumulate_update_num', options.IntegerOptionParser, 'the number of trial to cumulate data', default=-1)
+        op.add_option('candidate-feat-pca-path', 'candidate_feat_pca_path', options.StringOptionParser, 'The path for storing the pca results of candidate features',default=None)
+        op.add_option('candidate-feat-pca-noise', 'candidate_feat_pca_noise', options.FloatOptionParser, 'The sigma level of pca', default=0)
     def parse_solver_params(self, solver_params, op):
         SolverLoader.parse_solver_params(self, solver_params, op)
         if (not 'margin_func' in solver_params) and (op.get_value('margin_func') is not None):
@@ -184,7 +187,7 @@ class MMSolverLoader(SolverLoader):
             solver_params['margin_func'] = {'name':name, 'params':margin_params}
         else:
             solver_params['margin_func'] = {'name':'mpjpe', 'params':None}
-        
+
 class Solver(object):
     _default_list = [('mini', -1)]
     _required_field =  ['num_epoch', 'save_path', 'testing_freq', 'solver_type']
@@ -336,13 +339,19 @@ class MMSolver(Solver):
     """
     Abstract class for maximum margin solver
     """
-    _default_list = [('candidate_mode', 'random2'),
-                     ('cumulate_update_num', -1)] + Solver._default_list
-    _required_field = ['K_candidate', 'max_num', 'K_most_violated', 'candidate_mode',
-                       'margin_func', 'cumulate_update_num'] + Solver._required_field
+    _default_list = [('candidate_mode', 'random'),
+                     ('cumulate_update_num', -1), ('K_top_update', 1),
+                     ('candidate_feat_pca_noise',0.0),
+                     ('candidate_feat_pca_path',None)] + Solver._default_list
+    _required_field = ['K_candidate', 'max_num', 'K_most_violated', 'K_top_update', 'candidate_mode',
+                       'margin_func', 'cumulate_update_num', 'candidate_feat_pca_path', 'candidate_feat_pca_noise'] + Solver._required_field
+    def get_repindexes(cls, n, k):
+        return np.tile(np.array(range(n)).reshape((1,n)), [k, 1]).flatten(order='F')
     def create_candidate_indexes(self,  ndata, dp, train=True):
         """
         return K_candidate, canddiate_indexes
+        The returned index is the index within (training set | candidate set) before shuffle
+        
         """
         data_range = dp.data_range
         n_train = len(data_range)
@@ -356,7 +365,33 @@ class MMSolver(Solver):
             indexes = np.array(range(0, n_train) * ndata)
         elif candidate_mode == 'random2':
             K_candidate = self.solver_params['K_candidate']
-            indexes = np.concatenate([np.random.choice(range(0, n_train), size=K_candidate) for k in range(ndata)])
+            indexes = np.concatenate([np.random.choice(range(0, n_train), size=K_candidate, replace=False) for k in range(ndata)])
+        elif candidate_mode.find('randomneighbor_') != -1:
+            print 'Candidate mode is {} '.format(candidate_mode)
+            t = time()
+            K_candidate = self.solver_params['K_candidate']
+            if train == False:
+                indexes = np.random.randint(low=0, high=n_train, size = K_candidate * ndata)
+            else:
+                indexes = np.random.randint(low=0, high=n_train, size = K_candidate * ndata).reshape((K_candidate, ndata),order='F')
+                t1 = time() - t
+                t = time()
+                K_neighbor = int(candidate_mode[15:])
+                assert(n_train >= K_neighbor)
+                offset = data_range[0]
+                cur_data_indexes = np.asarray(self.cur_batch_indexes).flatten()
+                hf = K_neighbor//2
+                s_indexes = [ max(0, min(k - offset - hf, n_train - K_neighbor)) for k in cur_data_indexes]
+                index_neighbor = np.concatenate([np.array(range(k, k + K_neighbor)).reshape((K_neighbor, 1),order='F') for k in s_indexes], axis=1)
+                K_candidate = K_candidate + K_neighbor
+                print '''
+                     shape of index_neighbor {} shape of indexes {}
+                '''.format(index_neighbor.shape, indexes.shape)
+                indexes = np.concatenate([indexes, index_neighbor], axis=0).flatten(order='F')
+                t2 = time() - t
+                print '''
+                     Cost {} ({}, {})seconds to generate candidates \n \n
+                '''.format(t1+t2,t1,t2 )
         elif candidate_mode == 'testrandom':
             print '''
             Only used to check the performance on test samples\n Should not be used for normal
@@ -423,6 +458,13 @@ class MMSolver(Solver):
         else:
             raise Exception('I can not find margin_func')
             self.margin_func = lambda X:self.calc_margin(X)
+
+        if solver_params['candidate_feat_pca_path'] and solver_params['candidate_feat_pca_noise'] != 0:
+            feat_pca = mio.unpickle(solver_params['candidate_feat_pca_path'])
+            E = feat_pca['eigvector'] * np.sqrt(feat_pca['eigvalue']).reshape((1,-1),order='F')
+            self.candidate_feat_E = E *  solver_params['candidate_feat_pca_noise']
+        else:
+            self.candidate_feat_E = None
     @classmethod
     def concatenate_data(cls, data_list, theano_order=True):
         axis = 0 if theano_order else -1
@@ -468,6 +510,7 @@ class MMLSSolver(MMSolver):
         self.stat['sample_candidate_counts'] = np.zeros((n_train))  #
         self.stat['most_violated_counts'] = np.zeros((n_train))
         self.data_idx = self.train_net.data_idx
+        self.cur_batch_indexes = None
     def get_best_steps(cost_list):
         return np.argmin(np.array([x[0] for x in cost_list]))
     def get_search_steps(self):
@@ -529,6 +572,7 @@ class MMLSSolver(MMSolver):
         
         self.eval_net.set_train_mode(train=False) # Always use the test mode for searching
         K_mv = self.solver_params['K_most_violated']
+        K_update = self.solver_params['K_top_update']
         max_num = int(self.solver_params['max_num'])
         calc_margin = (lambda R:self.zero_margin(R, self.margin_dim)) if use_zero_margin else self.margin_func
         train_dp =  self.train_dp
@@ -566,8 +610,12 @@ class MMLSSolver(MMSolver):
                        self.gpu_require(margin.T)]
             outputs = self.eval_func(*alldata)[0]            
             outputs = outputs.reshape((K_tot, cur_num),order='F')
-            m_indexes = np.argmax(outputs, axis=0).flatten() + \
-                        np.array(range(0, cur_num)) * K_tot
+            # m_indexes = np.argmax(outputs, axis=0).flatten() + \
+            #             np.array(range(0, cur_num)) * K_tot
+            ##@
+            m_indexes = np.argpartition(-outputs, K_update, axis=0)[:K_update,:] + np.array(range(0, cur_num)).reshape((1,-1),order='F') * K_tot
+            m_indexes = m_indexes.flatten(order='F')
+            
             selected_indexes += cur_candidate_indexes[m_indexes].tolist()
             all_candidate_indexes += [cur_candidate_indexes]
         if train:
@@ -575,12 +623,19 @@ class MMLSSolver(MMSolver):
             self.stat['most_violated_counts'] += most_violated_cnt
         most_violated_features = fl[2][..., selected_indexes]
         most_violated_targets = fl[0][..., selected_indexes]
-        gt = data[0]
+        ##@
+        if K_update !=1:
+            rep_indexes = self.get_repindexes(ndata, K_update)
+            imgfeats, gt, gtfeats = data[1][..., rep_indexes], data[0][..., rep_indexes], data[2][..., rep_indexes]
+        else:
+            # data = [gt, imgfeature, gt_jtfeature, margin]
+            # return [gt, imgfeature, gt_jtfeature, mv_jtfeature, margin0, margin1]
+            imgfeats, gt, gtfeats = data[1] ,data[0], data[2]
         print 'data len ={}<<<<'.format(len(data))
         # mv_margin = self.calc_margin(gt - most_violated_targets)
         mv_margin = calc_margin(gt - most_violated_targets)
-        gt_margin = np.zeros((self.margin_dim, ndata), dtype=np.single)
-        alldata = [data[0], data[1], data[2],
+        gt_margin = np.zeros((self.margin_dim, ndata * K_update), dtype=np.single)
+        alldata = [imgfeats, gt, gtfeats,
                    most_violated_features, gt_margin, mv_margin]
         # extra information
         all_candidate_indexes_arr = np.concatenate(all_candidate_indexes)
@@ -605,10 +660,13 @@ class MMLSSolver(MMSolver):
         cumulate_update_num = self.solver_params['cumulate_update_num']
         pre_batch_done = self.get_num_batches_done(train=True)
         cur_data = self.get_next_batch(train=True)
+        K_top_update = self.solver_params['K_top_update']
+        self.cur_batch_indexes = self.train_dp.get_batch_indexes()
         self.epoch, self.batchnum = cur_data[0], cur_data[1]
         num_updates = 0
         while True: 
             if cumulate_update_num > 0:
+                collected_indexes = []
                 data_list = []
                 nsv_cum = 0
                 last_mv_data = None
@@ -629,17 +687,22 @@ class MMLSSolver(MMSolver):
                     nsv_cum += nsv
                     if nsv:
                         data_list.append(self.collect_sv(act_ind, tmp_data))
-                    if nsv_cum >= tmp_data[0].shape[0]:
+                        cur_indexes = self.train_dp.get_batch_indexes()
+                        collected_indexes += np.array(cur_indexes)[act_ind]
+                    if nsv_cum >= tmp_data[0].shape[0] * K_top_update:
                         break
                     next_epoch, next_batchnum = self.train_dp.epoch, self.train_dp.batchnum
                     if next_epoch  == self.num_epoch: 
                         break
                     if ct != cumulate_update_num - 1:
                         cur_data = self.get_next_batch(train=True)
+                        self.cur_batch_indexes = self.train_dp.get_batch_indexes()
                 if len(data_list) == 0:
                     alldata = last_mv_data
+                    self.cur_batch_indexes = self.train_dp.get_batch_indexes()
                 else:
                     alldata = self.concatenate_data(data_list)
+                    self.cur_batch_indexes = collected_indexes
             else:
                 self.print_iteration()
                 compute_time_py = time()
@@ -697,6 +760,7 @@ class MMLSSolver(MMSolver):
             if self.epoch  == self.num_epoch: 
                 break
             cur_data = self.get_next_batch(train=True)
+            self.cur_batch_indexes = self.train_dp.get_next_batch()
     def get_test_error(self):
         self.train_net.set_train_mode(train=False)
         self.eval_net.set_train_mode(train=False)
@@ -930,7 +994,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         n_train = len(self.train_dp.data_range)
         self.stat['sample_candidate_counts'] = np.zeros((n_train))  #
         self.stat['most_violated_counts'] = np.zeros((n_train))
-        
+        self.cur_batch_indexes = None
     def set_train_mode(self, train=True):
         for net in self.net_obj_list:
             net.set_train_mode(train)
@@ -954,12 +1018,20 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         fdata: [imgfeature, gt_target]  gt_target_feature can be the same as gt_target
         return [imgfeature, gt_target, mv_target, gt_margin, mv_margin]
         """
-        self.set_train_mode(False)  # Always use test mode for searching
+        self.set_train_mode(False)  # Always use test mode for searching       
         K_mv = self.solver_params['K_most_violated']
+        K_update = self.solver_params['K_top_update']
         max_num = int(self.solver_params['max_num'])
         calc_margin = (lambda R:self.zero_margin(R, self.margin_dim)) if use_zero_margin else self.margin_func
         
         dp =  self.train_dp
+        #@@@ for adding noise
+        if (self.candidate_feat_E is not None)  and train:
+            feat_E = self.candidate_feat_E / dp.max_depth
+        else:
+            feat_E = None
+        #
+         
         n_train = len(dp.data_range)
         ndata = fdata[0].shape[-1]
         
@@ -969,7 +1041,6 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         if train:
             cur_counts, dummy = np.histogram(candidate_indexes, bins=range(0, n_train + 1))
             self.stat['sample_candidate_counts'] = self.stat['sample_candidate_counts'] + cur_counts
-            
         mvc = self.stat['most_violated_counts']
         sorted_indexes = sorted(range(n_train), key=lambda k:mvc[k],reverse=True)
         holdon_indexes = np.array(sorted_indexes[:K_mv])            
@@ -991,16 +1062,28 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
             gt_target = np.tile(fdata[1][..., start:end], [K_tot, 1]).reshape((-1, K_tot * cur_num), order='F')
             imgfeatures = np.tile(fdata[0][..., start:end], [K_tot, 1]).reshape((-1, K_tot * cur_num ), order='F')
             margin = calc_margin(gt_target - candidate_targets)
+
+            ##@ adding noise
+            if feat_E is not None:
+                dim_X = candidate_targets.shape[0]
+                tmp = candidate_targets + np.dot(feat_E, np.random.randn(dim_X, candidate_targets.shape[-1]))
+                mpjpe_test = dutils.calc_mpjpe_from_residual(candidate_targets - tmp,17)
+                candidate_targets = tmp
+                # print '\n\n---- mpjpe test {}----\n\n'.format(np.mean(mpjpe_test.flatten()))
+            # #
             
             alldata = [self.gpu_require(imgfeatures.T),
                        self.gpu_require(candidate_targets.T),
                        self.gpu_require(margin.T)]
             
             outputs = self.eval_func(*alldata)[0]
-            
             outputs = outputs.reshape((K_tot, cur_num),order='F')
-            m_indexes = np.argmax(outputs, axis=0).flatten() + \
-                        np.array(range(0, cur_num)) * K_tot
+            # m_indexes = np.argmax(outputs, axis=0).flatten() + \
+            #             np.array(range(0, cur_num)) * K_tot
+            ##@@ 
+            m_indexes = np.argpartition(-outputs, K_update, axis=0)[:K_update,:] + np.array(range(0, cur_num)).reshape((1,-1),order='F') * K_tot
+            m_indexes = m_indexes.flatten(order='F')
+            ##
             selected_indexes += cur_candidate_indexes[m_indexes].tolist()
             all_candidate_indexes += [cur_candidate_indexes]
         if train:
@@ -1009,11 +1092,17 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
             
         # most_violated_features = fl[0][..., selected_indexes]
         most_violated_targets = fl[0][..., selected_indexes]
-        gt = fdata[1]
-        # mv_margin = self.calc_margin(gt - most_violated_targets)
+
+        ##@
+        if K_update != 1:
+            gt = np.tile(fdata[1], [K_update,1]).reshape((-1, K_update * ndata),order='F')
+            imgfeats = np.tile(fdata[0], [K_update,1]).reshape((-1, K_update*ndata),order='F')
+        else:
+            imgfeats,gt = fdata[0],fdata[1]
         mv_margin = calc_margin(gt - most_violated_targets)
-        gt_margin = np.zeros((self.margin_dim, ndata), dtype=np.single)
-        alldata = [fdata[0], fdata[1], most_violated_targets, gt_margin, mv_margin]
+        gt_margin = np.zeros((self.margin_dim, K_update * ndata ), dtype=np.single)
+
+        alldata = [imgfeats, gt, most_violated_targets, gt_margin, mv_margin]
         # extra information
         all_candidate_indexes_arr = np.concatenate(all_candidate_indexes)
         return alldata, [most_violated_targets, all_candidate_indexes_arr, selected_indexes]
@@ -1053,7 +1142,9 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
     def train(self):
         cumulate_update_num = self.solver_params['cumulate_update_num']
         pre_batch_done = self.get_num_batches_done(train=True)
-        cur_data = self.get_next_batch(train=True)        
+        cur_data = self.get_next_batch(train=True)
+        K_top_update = self.solver_params['K_top_update']
+        self.cur_batch_indexes = self.train_dp.get_batch_indexes()
         self.epoch, self.batchnum = cur_data[0], cur_data[1]
         num_updates = 0
         while True:
@@ -1067,13 +1158,17 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                     print '[{}]:------'.format(ct)
                     self.epoch, self.batchnum = cur_data[0], cur_data[1]
                     self.print_iteration()
-                    compute_time_pyt = time()
+                    compute_time_py = time()
                     input_data = self.prepare_data(cur_data[2])
                     imgfeatures = self.calc_image_features([input_data[0]])
                     fdata = [imgfeatures.T, input_data[1].T]
                     mvdata = self.find_most_violated(fdata, train=True)
                     mini_mv_input_data = [self.gpu_require(e.T) for e in mvdata]
-                    mini_mv_input_data[0] = input_data[0]
+                    if K_top_update == 1:
+                        mini_mv_input_data[0] = input_data[0]
+                    else:
+                        rep_indexes = np.tile(np.array(range(input_data[0].shape[0])).reshape((1, input_data[0].shape[0])), [K_top_update, 1]).flatten(order='F')
+                        mini_mv_input_data[0] = input_data[0][rep_indexes, ...]
                     res, act_ind = self.analyze_num_sv_ext(mini_mv_input_data)
                     nsv = np.sum(act_ind.flatten())
                     print 'support vector {} of {}:\t{}%\t mmcost={}'.format(nsv, act_ind.size,
@@ -1082,13 +1177,14 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                     nsv_cum += nsv
                     if nsv:
                         data_list.append(self.collect_sv(act_ind, mini_mv_input_data))
-                    if nsv_cum >=mini_mv_input_data[0].shape[0]:
+                    if nsv_cum >=mini_mv_input_data[0].shape[0] * K_top_update:
                         break
                     next_epoch, next_batchnum = self.train_dp.epoch, self.train_dp.batchnum
                     if next_epoch == self.num_epoch:
                         break
                     if ct != cumulate_update_num - 1:
                         cur_data = self.get_next_batch(train=True)
+                        self.cur_batch_indexes = self.train_dp.get_batch_indexes()
                 if len(data_list) == 0:
                     mv_input_data = last_mv_data
                 else:
@@ -1101,7 +1197,11 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                 fdata = [imgfeatures.T, input_data[1].T]            
                 mvdata = self.find_most_violated(fdata, train=True)
                 mv_input_data = [self.gpu_require(e.T) for e in mvdata]
-                mv_input_data[0] = input_data[0] 
+                if K_top_update == 1:
+                    mv_input_data[0] = input_data[0]
+                else:
+                    rep_indexes = self.get_repindexes(input_data[0].shape[0], K_top_update)
+                    mv_input_data[0] = input_data[0][rep_indexes, ...]
             compute_time_py = time()
 
             self.set_train_mode(train=True)
@@ -1109,8 +1209,9 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
             
             cur_costs = self.extract_cost(info)
             print 'Analyze-num-sv\t [Train]'
+            t0 = time()
             self.analyze_num_sv(mv_input_data)
-
+            print '   Analyze-num-sv costs {} seconds'.format(time() - t0)
             self.train_error.append(self.pack_cost(cur_costs, self.train_net))
             print 'train: {} seconds '.format(time()- compute_time_py)
             num_updates += 1
@@ -1131,6 +1232,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                 break
             compute_time_py = time()
             cur_data = self.get_next_batch(train=True)
+            self.cur_batch_indexes = self.train_dp.get_batch_indexes()
             print 'Loading data:\t{:.2f} seconds'.format(time()- compute_time_py)
     def get_test_error(self):
         self.set_train_mode(False)
@@ -1140,7 +1242,13 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         fdata = [imgfeatures.T, input_data[1].T]            
         mvdata = self.find_most_violated(fdata, train=False)
         mv_input_data = [self.gpu_require(e.T) for e in mvdata]
-        mv_input_data[0] = input_data[0]
+        K_update = self.solver_params['K_top_update'] 
+        if K_update == 1:
+            mv_input_data[0] = input_data[0]
+        else:
+            ntest = input_data[0].shape[0]
+            rep_indexes = np.tile(np.array(range(ntest)).reshape((1,ntest)), [K_update, 1]).flatten(order='F')
+            mv_input_data[0] = input_data[0][rep_indexes,...]
         costs = self.test_func(*mv_input_data)
         return costs
     def save_model(self):

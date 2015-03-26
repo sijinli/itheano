@@ -385,6 +385,8 @@ mpjpe as mv_margin is 87.8447293153
 saved to /opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0029_test_norm_eval
 
 Overall, the mpjpe is 88.9815219668
+
+
 ]
 }
 
@@ -927,6 +929,11 @@ EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_17_0041_test/
 INPROCESS_________________________________________________
 saved eva to /public/sijinli2/ibuffer/2015-03-13/2015_03_17_0041_test
+
+{
+Overall mpjpe is 90.2704326313
+}
+
 }
 
 RUN {
@@ -946,8 +953,14 @@ save_name=2015_03_17_0042_test
 EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 /opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_17_0042_test
-
 saved eva to /public/sijinli2/ibuffer/2015-03-13/2015_03_17_0042_test
+Overall mpjpe is 89.3799313826
+
+TopK20 {
+86.048053489292229
+top 1 = 93.346877640328742 - Although the top one performance is not the same as 89.3799313826
+}
+
 }
 
 RUN {
@@ -972,6 +985,10 @@ EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 91.2335426484
 ]
 
+[89.7871114616]
+
+
+
 }
 
 
@@ -993,7 +1010,13 @@ save_name=2015_03_17_0041_test_exp_mpjpe
 EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls --margin-func=exp_mpjpe'
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 COMMENTS: 
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_17_0041_test_exp_mpjpe/0@19
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_17_0041_test_exp_mpjpe/
+
+[ random batch 20000, 
+mpjpe as mv_margin is 90.5185892586
+]
+
+
 }
 
 RUN {
@@ -1012,8 +1035,18 @@ TestRange=132744-162007
 save_name=2015_03_19_0042_1_test
 EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls'
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_19_0042_1_test
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_19_0042_1_test
 COMMENTS: Try larger coeff for mmcost
+
+[random batch 20000
+mpjpe as mv_margin is 89.9030754263
+]
+
+[overall
+The avg mpjpe is [ 87.43279765] Use top20 average 
+The top mpjpe is [ 94.78427634]
+]
+
 }
 
 RUN {
@@ -1036,6 +1069,13 @@ EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 
 }
 
+{
+0045 network
+Different dropout location
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_19_0045_test/
+[Overall mpjpe is 95.0885497934]
+}
+
 RUN {
 exp_name=ASM_act_14_exp_2
 DP=croppedjt
@@ -1053,7 +1093,19 @@ save_name=2015_03_20_0046_test
 EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls --margin-func=jpe'
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_20_0046_test/
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_20_0046_test/
+
+[random 20000
+mpjpe as mv_margin is 90.2746934598
+]
+
+[random 20000
+mpjpe as mv_margin is 96.1959185517
+]
+
+[
+
+]
 
 }
 
@@ -1062,3 +1114,135 @@ NOTE{
 After this point, all the default candidate_mode will be set to 
 random2
 }
+
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0041
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=100
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_21_0041_test_randomneighbor
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls --candidate-mode=randomneighbor_50'
+TF=1
+
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+
+
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_21_0041_test_randomneighbor/
+
+{random test epoch 78427634
+mpjpe as mv_margin is 91.8994955179
+}
+}
+
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0047
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=30
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_22_0047_test_sgd_randomneighbor
+EXTRA='--cumulate-update-num=5 --force-shuffle=1 --opt-method=ls --candidate-mode=randomneighbor_30'
+TF=5
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+
+COMMENTS: In this experiments, I will use very smaller numberr of candidates, so that it will be much efficient.
+And add random samples near the training samples
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_21_0042_test_sgd_randomneighbor
+
+[random test epoch 0
+mpjpe as mv_margin is 95.6171823592]
+[epoch 0
+Overall mpjpe is 97.0530138446
+]
+
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_22_0047_test_sgd_randomneighbor/
+[
+random batch estimation
+mpjpe as mv_margin is 95.0540917327
+]
+
+}
+
+
+NOTE{
+The default candidate mode has been changed to random again.
+random2 is too slow. 
+}
+
+
+RUN {
+exp_name=ASM_act_14_exp_12
+DP=croppedjt
+macid=18
+JT=0012
+EP=200
+BSIZE=128
+run_mac=c8k$(macid)
+
+TrainRange=0-132743
+TestRange=132744-162007
+test_freq=15
+save_name=2015_03_23_$(exp_name)_$(macid)_graph_$(JT)
+SP_NOTE=
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_23_ASM_act_14_exp_12_18_graph_0012
+
+After 48 iteration, I use smaller learning rate to tune.
+
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0042
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_24_0042_topK3update
+EXTRA='--cumulate-update=3 --force-shuffle=1 --opt-method=ls --K-top-update=3'
+TF=1
+
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_24_0042_topK3update/
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0042
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_24_0042_topK3update_c1
+EXTRA='--force-shuffle=1 --opt-method=ls --K-top-update=8'
+TF=5
+}
+
+

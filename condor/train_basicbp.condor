@@ -1,17 +1,17 @@
-exp_name=ASM_act_5_exp_10
+exp_name=ASM_act_14_exp_12
 DP=croppedjt
-macid=17
-JT=0012
+macid=18
+JT=0012_tune
 EP=200
 BSIZE=128
 run_mac=c8k$(macid)
 
-TrainRange=0-72435
-TestRange=72436-103079
+TrainRange=0-132743
+TestRange=132744-162007
 
 
 test_freq=15
-save_name=2015_02_14_$(exp_name)_$(macid)_graph_$(JT)
+save_name=2015_03_23_$(exp_name)_$(macid)_graph_$(JT)
 
 SP_NOTE=
 
@@ -25,6 +25,7 @@ getenv      = True
 executable  = /home/grads/sijinli2/pkg/anaconda/bin/python
 universe    = vanilla
 arguments  =  /home/grads/sijinli2/Projects/Itheano/Python/task/train_basicbp.py --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_$(exp_name) --num-epoch=$(EP) --data-provider=$(DP) --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_$(JT).cfg --testing-freq=$(test_freq) --batch-size=$(BSIZE) --train-range=$(TrainRange) --test-range=$(TestRange) --save-path=/opt/visal/tmp/for_sijin/Data/saved/theano_models/$(save_name) --solver-type=basicbp 
+
 input      = 
 output      = /opt/visal/tmp/for_sijin/Data/logs/$(exp_name)_$(run_mac)-$(JT)$(SP_NOTE).output
 error       = /opt/visal/tmp/for_sijin/Data/logs/$(exp_name)_$(run_mac)-$(JT)$(SP_NOTE).err
@@ -76,6 +77,6 @@ queue
 ## TestRange=76048-105367
 
 ##################
-## For exp 1-3
+## For exp 1-3, 12
 ## TrainRange=0-132743
 ## TestRange=132744-162007
