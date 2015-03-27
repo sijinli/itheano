@@ -136,6 +136,12 @@ class SolverLoader(object):
     def parse_solver_params(self, solver_params, op):
         if self.dp_params:
             solver_params['dp_params'] = self.dp_params
+    @classmethod
+    def is_valid_value(cls, op, e):
+        v = op.get_value(e)
+        if v is None or (type(v) is str and len(v) == 0):
+            return False
+        return True
     def create_solver(self, op, net_dic, train_dp, test_dp, saved_model):
         saved_params = saved_model['solver_params'] if saved_model else dict()
         solver_params = dict()
@@ -147,8 +153,9 @@ class SolverLoader(object):
         required_list = _cls._required_field
         default_dic = dict(_cls._default_list)
         # params in saved_params has least priority
+        
         for e in required_list:
-            if (not e in solver_params) and op.get_value(e) is not None:
+            if (not e in solver_params) and self.is_valid_value(op, e):
                 solver_params[e] = op.get_value(e)
             elif e in default_dic:
                 solver_params[e] = default_dic[e]
@@ -176,7 +183,7 @@ class MMSolverLoader(SolverLoader):
         op.add_option('margin-func', 'margin_func', options.StringOptionParser, 'the parameters for marginl', default='mpjpe')
         op.add_option('candidate-mode', 'candidate_mode', options.StringOptionParser, 'the parameters for marginl', default='random')
         op.add_option('cumulate-update-num', 'cumulate_update_num', options.IntegerOptionParser, 'the number of trial to cumulate data', default=-1)
-        op.add_option('candidate-feat-pca-path', 'candidate_feat_pca_path', options.StringOptionParser, 'The path for storing the pca results of candidate features',default=None)
+        op.add_option('candidate-feat-pca-path', 'candidate_feat_pca_path', options.StringOptionParser, 'The path for storing the pca results of candidate features',default='')
         op.add_option('candidate-feat-pca-noise', 'candidate_feat_pca_noise', options.FloatOptionParser, 'The sigma level of pca', default=0)
     def parse_solver_params(self, solver_params, op):
         SolverLoader.parse_solver_params(self, solver_params, op)
