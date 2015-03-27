@@ -1177,7 +1177,6 @@ Overall mpjpe is 97.0530138446
 random batch estimation
 mpjpe as mv_margin is 95.0540917327
 ]
-
 }
 
 
@@ -1231,6 +1230,11 @@ Residuals for best match poses 51.3639987012
 mpjpe as mv_margin is 88.2353075674
 ]
 
+[random batch 21@276
+Residuals for best match poses 50.1200757436
+mpjpe as mv_margin is 90.4444675224
+]
+
 }
 
 RUN {
@@ -1255,6 +1259,11 @@ TF=5
 Residuals for best match poses 52.1980601288
 mpjpe as mv_margin is 93.1146696535
 ]
+
+[3@755 random batch exp
+mpjpe as mv_margin is 90.443424533
+]
+
 }
 
 
@@ -1275,4 +1284,33 @@ save_name=2015_03_26_0042_pca_noise_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-feat-pca-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/rel_pca.meta --candidate-feat-pca-noise=0.0003'
 TF=5
 /opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_26_0042_pca_noise_test/
+
+[
+14@298
+Residuals for best match poses 52.0541670049
+mpjpe as mv_margin is 89.0744402008
+]
+}
+
+
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0047
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_27_0047_pca_noise_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-feat-pca-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/rel_pca.meta --candidate-feat-pca-noise=0.0003'
+TF=5
+
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+
 }
