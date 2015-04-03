@@ -80,7 +80,7 @@ def show_bm_cmp(ndata, gt_target, mv_target, bm_targets, mv_score, gt_score,
     pl.scatter(range(ndata), mv_score, s=pt_size, c='r',label='max score')
     pl.scatter(range(ndata), bm_score, s=pt_size,c='b',label='best match score')
     pl.legend()
-    pl.show()
+    # pl.show()
 def get_fdata(solver, data):
     if solver._solver_type == 'mmls':
         return data[2]
@@ -117,11 +117,11 @@ def get_batch_best_match(candidate_targets, targets, solver):
     match_indexes = np.array(match_indexes, dtype=np.int)
     print 'Cost {} seconds for finding the best match for current batch'.format(time() - start_time)
     return res, match_indexes
-def show_highest_score(train, solver):
+def show_highest_score(train, solver, op):
     """
     This function will load data from train or test set
     """
-
+    no_display = op.get_value('no_display')
     dp = solver.train_dp if train else solver.test_dp
     dp.reset()
     func = get_eval_func(solver)
@@ -176,8 +176,8 @@ def show_highest_score(train, solver):
     # save_path  = '/public/sijinli2/ibuffer/2015-03-08/t1'
     # mio.pickle(save_path, d)
     #
-
-    pl.show()
+    if not no_display:
+        pl.show()
 def eval_mpjpe_all(train, solver):
     assert(train==False)
     save_folder = '/public/sijinli2/ibuffer/2015-03-13/2015_03_10_0037_corrected_version'
@@ -315,9 +315,9 @@ def analyze_eval_saved():
         pl.ylabel('maximum score in the candidate set')
         imgproc.imsave_tight('/public/sijinli2/ibuffer/2015-03-13/{}/{}_gt_vs_mv_score_debug.png'.format(model_folder_name, model_folder_name))
         pl.show()
-    show_plot_bm_mv()
-    show_gt_mv_score()
-    show_scatter_bm_mv()
+    # show_plot_bm_mv()
+    # show_gt_mv_score()
+    # show_scatter_bm_mv()
 
     def show_mpjpe_hist():
         s_mpjpe = mpjpe[sorted_idx]
@@ -373,8 +373,9 @@ def analyze_eval_saved():
             dutils.show_3d_skeleton(p2, limbs, params)
             pl.title('bm({:.2f})'.format(bm_mpjpe[i]))
             nc = nc + 1
-        imgproc.imsave_tight('/public/sijinli2/ibuffer/2015-03-13/2015_03_12_0039_slack_again_100_show_pose')
-        pl.show()
+        imgproc.imsave_tight('/public/sijinli2/ibuffer/2015-03-13/{}/{}_show_pose_cmp.png'.format(model_folder_name, model_folder_name))      
+    show_pose_cmp()
+    pl.show()
         
 
 def show_mpjpe_vs_score(train, solver):
@@ -478,15 +479,31 @@ def parse_fdata(fdata, solver):
     else:
         return fdata[0], fdata[1]
     
-def show_topK_pose_eval(solver, train = False):
+def show_topK_pose_eval(solver, train, op):
     dp = solver.train_dp if train else solver.test_dp
     assert(train == False)
     func = get_eval_func(solver)
     num_batch = dp.num_batch
     all_avg_mpjpe, all_top_mpjpe = [], []
     save_path = '/public/sijinli2/ibuffer/2015-03-13/2015_03_17_0042_test/topK20'
+    save_folder = op.get_value('save_res_path')
+    topK = 20
+    if len(save_folder) == 0:
+        raise Exception('The savepath are not supplied')
+    print 'Save path = {}'.format(save_folder)
+    iu.ensure_dir(save_folder)
+    save_path = iu.fullfile(save_folder, 'topK_{}'.format(topK))
     dp.reset()
+    if iu.exists(save_path, 'file'):
+        d = mio.unpickle(save_path)
+        all_avg_mpjpe = d['avg_mpjpe'].flatten().tolist()
+        all_top_mpjpe = d['top_mpjpe'].flatten().tolist()
+    else:
+        d = {'avg_mpjpe':None, 'top_mpjpe':None, 'finished':0}
+        mio.pickle(save_path, d)
     for bn in range(num_batch):
+        if d['finished'] > bn:
+            continue
         print 'Begin to load data batch {}'.format(bn)
         t = time()
         data = solver.get_next_batch(train)
@@ -499,7 +516,7 @@ def show_topK_pose_eval(solver, train = False):
         fl = get_feature_list(solver, solver.train_dp)
         batch_candidate_targets = fl[0][...,batch_candidate_indexes_all]
         batch_candidate_features = fl[2][..., batch_candidate_indexes_all]
-        topK = 20
+
         top_list, avg_list = [], []
         print 'batch target {} \t features {} \t img_features {}'.format(batch_candidate_targets.shape, batch_candidate_features.shape, img_features.shape)
         for b in range(ndata):
@@ -528,7 +545,8 @@ def show_topK_pose_eval(solver, train = False):
         print '    batch {} The top mpjpe is {}'.format(bn, sum(top_list)/ndata)
         all_avg_mpjpe += avg_list
         all_top_mpjpe += top_list
-        d = {'avg_mpjpe':np.array(all_avg_mpjpe), 'top_mpjpe':np.array(all_top_mpjpe)}
+        d = {'avg_mpjpe':np.array(all_avg_mpjpe), 'top_mpjpe':np.array(all_top_mpjpe),
+        'finished': bn + 1}
         mio.pickle(save_path, d)
     
 def test_tmp():
@@ -553,11 +571,15 @@ def test_tmp():
     print d2['gt_score'][[0,1,2,3,4,5],0]
 class MMEvalPoseLoader(MMSolverLoader):
     _inner_loader_dic = {'mmls': MMLSSolverLoader, 'imgmm':ImageMMSolverLoader}
-    def add_default_options(self, op):
-        MMSolverLoader.add_default_options(self, op)
-        op.add_option('mode', 'mode', options.StringOptionParser, 'the most for testing',default='')
+    @classmethod
+    def add_extra_op(cls, op):
+        op.add_option('mode', 'mode', options.StringOptionParser, 'the most for testing',default='shs')
         op.add_option('mode-params', 'mode_params', options.StringOptionParser, 'the most for testing', default='')
         op.add_option('save-res-path', 'save_res_path', options.StringOptionParser, 'The path for saving results', default='')
+        op.add_option('no-display', 'no_display', options.BooleanOptionParser, 'Will not display any figure', default=False)
+    def add_default_options(self, op):
+        MMSolverLoader.add_default_options(self, op)
+        self.add_extra_op(op)
     def parse(self):
         self.op.parse()
         self.op.eval_expr_defaults()
@@ -566,8 +588,8 @@ class MMEvalPoseLoader(MMSolverLoader):
             raise Exception('Please specify solver type')
         print '-------Solver type {}---------'.format(solver_type)
         inner_loader = self._inner_loader_dic[solver_type]()
+        self.add_extra_op(inner_loader.op)
         return inner_loader.parse()
-
 def main():
     # test_tmp()
     # analyze_eval_saved()
@@ -580,10 +602,15 @@ def main():
     solver.solver_params['K_candidate'] = 20000
     solver.solver_params['max_num'] = 1
     solver.solver_params['K_top_update'] = 1
-    show_highest_score(train=False, solver=solver)
+    mode = loader.op.get_value('mode')
+    if mode == 'shs':
+        show_highest_score(train=False, solver=solver, op = loader.op)
+    elif mode == 'stpe':
+        show_topK_pose_eval(solver, train=False, op=loader.op)
+    # show_highest_score(train=False, solver=solver, op = loader.op)
     # show_highest_score(train=True, solver=solver)
     # eval_mpjpe_all(train=False, solver=solver)
     # show_mpjpe_vs_score(train=False, solver=solver)
-    # show_topK_pose_eval(solver, train=False)
+    # show_topK_pose_eval(solver, train=False, op = loader.op) 
 if __name__ == '__main__':
     main()

@@ -1223,17 +1223,31 @@ save_name=2015_03_24_0042_topK3update
 EXTRA='--cumulate-update=3 --force-shuffle=1 --opt-method=ls --K-top-update=3'
 TF=1
 
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_24_0042_topK3update/
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_24_0042_topK3update/
 
 [13@996
 Residuals for best match poses 51.3639987012
 mpjpe as mv_margin is 88.2353075674
-]
-
-[random batch 21@276
+21@276
 Residuals for best match poses 50.1200757436
 mpjpe as mv_margin is 90.4444675224
+33@536
+mpjpe as mv_margin is 91.6094269655
+35@360
+mpjpe as mv_margin is 92.0158026834
+36@24
+mpjpe as mv_margin is 93.32317196
+40@862
+mpjpe as mv_margin is 90.3979421025
+45@178
+mpjpe as mv_margin is 97.7338726275
+50@876
+mpjpe as mv_margin is 90.5562632788
 ]
+
+[stopped]
+
+
 
 }
 
@@ -1253,7 +1267,7 @@ TestRange=132744-162007
 save_name=2015_03_24_0042_topK8update_c1
 EXTRA='--force-shuffle=1 --opt-method=ls --K-top-update=8'
 TF=5
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_24_0042_topK8update_c1
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_24_0042_topK8update_c1
 
 [random batch exp 2@368
 Residuals for best match poses 52.1980601288
@@ -1263,6 +1277,21 @@ mpjpe as mv_margin is 93.1146696535
 [3@755 random batch exp
 mpjpe as mv_margin is 90.443424533
 ]
+
+[
+5@809
+mpjpe as mv_margin is 92.2669452486
+]
+
+[6@26
+mpjpe as mv_margin is 96.7995290513
+]
+
+[6@26
+mpjpe as mv_margin is 98.2111092447
+]
+
+[stopped]
 
 }
 
@@ -1283,13 +1312,17 @@ TestRange=132744-162007
 save_name=2015_03_26_0042_pca_noise_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-feat-pca-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/rel_pca.meta --candidate-feat-pca-noise=0.0003'
 TF=5
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_26_0042_pca_noise_test/
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_26_0042_pca_noise_test/
 
 [
 14@298
 Residuals for best match poses 52.0541670049
 mpjpe as mv_margin is 89.0744402008
+62@864
+92.3428497757
+
 ]
+
 }
 
 
@@ -1313,4 +1346,239 @@ TF=5
 
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_27_0047_pca_noise_test/
+[12@508, random batch experiments
+mpjpe as mv_margin is 90.9126491098
+16@152
+mpjpe as mv_margin is 88.4876599985
+19@302
+mpjpe as mv_margin is 93.3538373705
+20@434
+mpjpe as mv_margin is 86.2148385546
+29@172
+mpjpe as mv_margin is 95.2508993473
+36@146
+mpjpe as mv_margin is 89.8007936875
+42@428
+mpjpe as mv_margin is 96.819477747
+]
+
+[stopped]
+[
+ avg = 89.6028593405 top = 96.6291008498
+]
+
 }
+
+
+RUN { [ON Calculon]
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0047
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=100
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_27_0047_pca_noise_randomneighbor50_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-feat-pca-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/rel_pca.meta --candidate-feat-pca-noise=0.0003 --candidate-mode=randomneighbor_50'
+TF=5
+
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_27_0047_pca_noise_randomneighbor50_test
+
+[3@51
+mpjpe as mv_margin is 92.5469464374
+6@1011
+mpjpe as mv_margin is 90.1425236221
+10@734
+mpjpe as mv_margin is 94.869931494
+]
+[stopped]
+}
+
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0048
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_28_0048_pca_noise_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-feat-pca-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/rel_pca.meta --candidate-feat-pca-noise=0.0003'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_28_0048_pca_noise_test/
+
+[
+9@808
+mpjpe as mv_margin is 91.3940373133
+14@562
+mpjpe as mv_margin is 93.6556538261
+17@368
+mpjpe as mv_margin is 94.9842685977
+]
+
+[STOPPED]
+
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0049
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_30_0049_pca_noise_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-feat-pca-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/rel_pca.meta --candidate-feat-pca-noise=0.0003'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_03_30_0049_pca_noise_test/
+[
+Residuals for best match poses 50.599447249
+mpjpe as mv_margin is 91.4719185181
+]
+
+}
+
+RUN{
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0050
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_30_0050_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
+TF=5
+
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_30_0050_test
+[
+8@795
+Residuals for best match poses 50.3407648289
+mpjpe as mv_margin is 116.614497324
+]
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0051
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_03_30_0051_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
+TF=5
+
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+
+[Although I run it from Apr 1]
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_30_0051_test/7@313
+
+The performance for net2_mmcost is really bad
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0052
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_01_01_0052_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
+TF=5
+
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+}
+
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0054
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_02_0053_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
+TF=5
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_02_0054_test/
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0055
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_03_0055_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0055_test/
+
+It is strange. The error on mmcost looks good. 
+
+However, the prediction error is not good.
+
+[epoch 0
+mpjpe as mv_margin is 120.355821038
+]
+
+}
+
+RUN {
+
+}
+
+
+

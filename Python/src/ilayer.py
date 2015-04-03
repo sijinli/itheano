@@ -449,6 +449,90 @@ class ElementwiseSumLayer(Layer):
             self.coeffs = [theano.shared(x) for x in param_dic['coeffs']]
         else:
             self.coeffs = None
+
+class ElementwiseMulParser(LayerParser):
+    def parse(self):
+        dic = LayerParser.parse_layer_params(self)
+        return ElementwiseMulLayer(self.inputs, dic)
+class ElementwiseMulLayer(Layer):
+    def __init__(self, inputs, param_dic=None):
+        Layer.__init__(self, inputs, param_dic)
+        self.inputs = inputs
+        if param_dic:
+            self.parse_param_dic(param_dic)
+        assert(len(inputs)  ==  2)
+        raw_outputs = inputs[0] * inputs[1] 
+        if self.activation_func:
+            self.outputs = [self.activation_func(raw_outputs)]
+        else:
+            self.outputs = [raw_outputs]
+        self.param_dic['type'] = 'eltmul'
+        self.param_dic['output_dims'] = [param_dic['input_dims'][0]]
+        self.set_output_names(self.param_dic['name'], self.outputs)
+class ConcatenateParser(LayerParser):
+    def parse(self):
+        dic = LayerParser.parse_layer_params(self)
+        return ConcatenateLayer(self.inputs, dic)
+class ConcatenateLayer(Layer):
+    def __init__(self, inputs, param_dic=None):
+        Layer.__init__(self, inputs, param_dic)
+        if param_dic:
+            self.parse_param_dic(param_dic)
+        assert( len(inputs) > 1)
+        raw_outputs = tensor.concatenate(inputs, axis=1)
+        if self.activation_func:
+            self.outputs = [self.activation_func(raw_outputs)]
+        else:
+            self.outputs = [raw_outputs]
+        self.param_dic['type'] = 'concat'
+        self.param_dic['output_dims'] = [sum(param_dic['input_dims'])]
+        self.set_output_names(self.param_dic['name'], self.outputs)
+        
+class StackParser(LayerParser):
+    def parse(self):
+        dic = LayerParser.parse_layer_params(self)
+        if (len(set(dic['input_dims'])) != 1):
+            raise Exception('The layers to be stacked does not have the same dimension \n {}'.format(dic['input_dims']))
+        return StackLayer(self.inputs, dic)
+class StackLayer(Layer):
+    def __init__(self,inputs, param_dic=None):
+        Layer.__init__(self, inputs, param_dic)
+        if param_dic:
+            self.parse_param_dic(param_dic)
+        assert( len(inputs) > 1)
+        raw_outputs = tensor.concatenate(inputs, axis=0)
+        if self.activation_func:
+            self.outputs = [self.activation_func(raw_outputs)]
+        else:
+            self.outputs = [raw_outputs]
+        self.param_dic['type'] = 'stack'
+        self.param_dic['output_dims'] = [param_dic['input_dims'][0]]
+        self.set_output_names(self.param_dic['name'], self.outputs)
+        
+class DotProdParser(LayerParser):
+    def parse(self):
+        dic = LayerParser.parse_layer_params(self)
+        if len(dic['input_dims']) != 2:
+            raise Exception('The input of layer {} should be 2'.format(dic['name']))
+        if dic['input_dims'][0] != dic['input_dims'][1]:
+            raise Exception('The layers to be stacked does not have the same dimension \n {}'.format(dic['input_dims']))
+        return DotProdLayer(self.inputs, dic)
+class DotProdLayer(Layer):
+    def __init__(self, inputs, param_dic=None):
+        Layer.__init__(self, inputs, param_dic)
+        if param_dic:
+            self.parse_param_dic(param_dic)
+        assert( len(inputs) == 2)
+        raw_outputs = (inputs[0] * inputs[1]).sum(axis=1, keepdims=True)
+        if self.activation_func:
+            self.outputs = [self.activation_func(raw_outputs)]
+        else:
+            self.outputs = [raw_outputs]
+        self.param_dic['type'] = 'dotprod'
+        self.param_dic['output_dims'] = [1]
+        self.set_output_names(self.param_dic['name'], self.outputs)
+        
+        
 class FCParser(LayerWithWeightsParser):
     def parse(self):
         dic = LayerWithWeightsParser.parse_layer_params(self)
@@ -957,7 +1041,10 @@ class Network(object):
         
 layer_parser_dic={'fc':FCParser,'data':DataParser, 'cost.maxmargin':MaxMarginCostParser,
                   'cost.bce':BinaryCrossEntropyCostParser, 'cost.sqdiff':SquareDiffCostParser,
-                  'eltsum':ElementwiseSumParser, 'conv':ConvParser, 'pool':PoolParser,
+                  'eltsum':ElementwiseSumParser, 'eltmul':ElementwiseMulParser,
+                  'stack':StackParser, 'dotprod':DotProdParser,
+                  'concat': ConcatenateParser,
+                  'conv':ConvParser, 'pool':PoolParser,
                   'dropout':DropoutParser, 'cost.cosine':CosineCostParser,
                   'neuron':NeuronParser, 'batchnorm':BatchNormParser,
                   'elemscale':ElementwiseScaleParser,

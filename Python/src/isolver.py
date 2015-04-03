@@ -185,6 +185,7 @@ class MMSolverLoader(SolverLoader):
         op.add_option('cumulate-update-num', 'cumulate_update_num', options.IntegerOptionParser, 'the number of trial to cumulate data', default=-1)
         op.add_option('candidate-feat-pca-path', 'candidate_feat_pca_path', options.StringOptionParser, 'The path for storing the pca results of candidate features',default='')
         op.add_option('candidate-feat-pca-noise', 'candidate_feat_pca_noise', options.FloatOptionParser, 'The sigma level of pca', default=0)
+        op.add_option('opt-num', 'opt_num', options.IntegerOptionParser, 'the number of times to update after finding the most violated one', default=1)
     def parse_solver_params(self, solver_params, op):
         SolverLoader.parse_solver_params(self, solver_params, op)
         if (not 'margin_func' in solver_params) and (op.get_value('margin_func') is not None):
@@ -348,9 +349,9 @@ class MMSolver(Solver):
     """
     _default_list = [('candidate_mode', 'random'),
                      ('cumulate_update_num', -1), ('K_top_update', 1),
-                     ('candidate_feat_pca_noise',0.0),
+                     ('candidate_feat_pca_noise',0.0), ('opt_num', 1),
                      ('candidate_feat_pca_path',None)] + Solver._default_list
-    _required_field = ['K_candidate', 'max_num', 'K_most_violated', 'K_top_update', 'candidate_mode',
+    _required_field = ['K_candidate', 'max_num', 'K_most_violated', 'K_top_update', 'candidate_mode', 'opt_num',
                        'margin_func', 'cumulate_update_num', 'candidate_feat_pca_path', 'candidate_feat_pca_noise'] + Solver._required_field
     def get_repindexes(cls, n, k):
         return np.tile(np.array(range(n)).reshape((1,n)), [k, 1]).flatten(order='F')
@@ -374,7 +375,7 @@ class MMSolver(Solver):
             K_candidate = self.solver_params['K_candidate']
             indexes = np.concatenate([np.random.choice(range(0, n_train), size=K_candidate, replace=False) for k in range(ndata)])
         elif candidate_mode.find('randomneighbor_') != -1:
-            print 'Candidate mode is {} '.format(candidate_mode)
+            # print 'Candidate mode is {} '.format(candidate_mode)
             t = time()
             K_candidate = self.solver_params['K_candidate']
             if train == False:
@@ -391,14 +392,11 @@ class MMSolver(Solver):
                 s_indexes = [ max(0, min(k - offset - hf, n_train - K_neighbor)) for k in cur_data_indexes]
                 index_neighbor = np.concatenate([np.array(range(k, k + K_neighbor)).reshape((K_neighbor, 1),order='F') for k in s_indexes], axis=1)
                 K_candidate = K_candidate + K_neighbor
-                print '''
-                     shape of index_neighbor {} shape of indexes {}
-                '''.format(index_neighbor.shape, indexes.shape)
                 indexes = np.concatenate([indexes, index_neighbor], axis=0).flatten(order='F')
-                t2 = time() - t
-                print '''
-                     Cost {} ({}, {})seconds to generate candidates \n \n
-                '''.format(t1+t2,t1,t2 )
+                # t2 = time() - t
+                # print '''
+                #      Cost {} ({}, {})seconds to generate candidates \n \n
+                # '''.format(t1+t2,t1,t2 )
         elif candidate_mode == 'testrandom':
             print '''
             Only used to check the performance on test samples\n Should not be used for normal
@@ -472,6 +470,7 @@ class MMSolver(Solver):
             self.candidate_feat_E = E *  solver_params['candidate_feat_pca_noise']
         else:
             self.candidate_feat_E = None
+        self.opt_num = solver_params['opt_num']
     @classmethod
     def concatenate_data(cls, data_list, theano_order=True):
         axis = 0 if theano_order else -1
@@ -678,6 +677,45 @@ class MMLSSolver(MMSolver):
             print('{}:\t v:{:+.6e} \t g: {:+.6e} \t [{:+.6e}]'.format(s.name,
                                                                       avgw, avgg,
                                                                       avgg/avgw))
+    def do_opt(self, alldata):
+        compute_time_py = time()
+        self.train_net.set_train_mode(train=True)
+        self.eval_net.set_train_mode(train=True)
+        params = self.train_net.params
+        params_eps = [e.get_value() for e in self.train_net.params_eps]
+        params_host = [v.get_value(borrow=False) for v in params] # backup
+        n_data = alldata[0].shape[0]
+        steps = self.get_search_steps()
+        info = None
+        for k in range(self.opt_num):
+            cur_gradiens = self.call_func(self.grad_func, alldata)
+            cost_list = []
+            for s in steps:
+                ss = s # no need to do the normalization any more
+                inner_params_host = [p - (ss * eps) * g for p,g,eps in zip(params_host,
+                                                                           cur_gradiens,
+                                                                           params_eps)]
+                self.set_params(params, inner_params_host)
+                cur_cost = self.call_func(self.test_func, alldata)
+                cost_list.append([cur_cost[0]])
+            min_idx = np.argmin(cost_list)
+            best_step = steps[min_idx]
+            print '    cost = {} \t [max: {}]'.format(cost_list[min_idx], max(cost_list))
+            print '    best step is {}'.format(best_step)
+            if k == self.opt_num - 1:
+                g_update = [(best_step * eps) * g for g,eps in zip(cur_gradiens, params_eps)]
+                self.analyze_param_vs_gradients(params_host, g_update, params )
+                params_host = [p -  g for p,g in zip(params_host, g_update)]
+                self.set_params(params, params_host)
+                info = {'mmcost':cost_list[min_idx]}
+            else:
+                inner_params_host = [p - (best_step * eps) * g for p,g,eps in zip(params_host,
+                                                                                  cur_gradiens,
+                                                                                  params_eps)]
+                params_host = inner_params_host
+                self.set_params(params, inner_params_host)
+        print 'Optimization {} times:\t (%.3f sec)' % (self.opt_num, time()- compute_time_py)
+        return info
     def train(self):
         cumulate_update_num = self.solver_params['cumulate_update_num']
         pre_batch_done = self.get_num_batches_done(train=True)
@@ -731,42 +769,44 @@ class MMLSSolver(MMSolver):
                 most_violated_data = self.find_most_violated(cur_data[2], train=True)
                 alldata = [self.gpu_require(e.T) for e in most_violated_data[1:]]
                 print 'Searching the most violated cost %.3f sec' % (time() - compute_time_py)
-            steps = self.get_search_steps()
-            # Inside model the data are interpreted as [ndata x dim]
-            compute_time_py = time()
-            # cur_gradiens = self.grad_func(alldata)
 
-            self.train_net.set_train_mode(train=True)
-            self.eval_net.set_train_mode(train=True)
-            cur_gradiens = self.call_func(self.grad_func, alldata)
-            params = self.train_net.params
-            params_eps = [e.get_value() for e in self.train_net.params_eps]
-            params_host = [v.get_value(borrow=False) for v in params] # backup
-            cost_list = []
-            n_data = alldata[0].shape[0]
-            for s in steps:
-                ss = s # no need to do the normalization any more
-                inner_params_host = [p - (ss * eps) * g for p,g,eps in zip(params_host,
-                                                                           cur_gradiens,
-                                                                           params_eps)]
-                self.set_params(params, inner_params_host)
-                cur_cost = self.call_func(self.test_func, alldata)
-                cost_list += [cur_cost[0]]
-            min_idx = np.argmin(cost_list)
-            best_step = steps[min_idx]
-            print 'cost = {} \t [max: {}]'.format(cost_list[min_idx], max(cost_list))
-            self.train_error.append({'mmcost':cost_list[min_idx]})
-            # self.print_layer_outputs(alldata)
-            # update params_host
-            g_update = [(best_step * eps) * g for g,eps in zip(cur_gradiens, params_eps)]
-            print 'best step is {}'.format(best_step)
-            self.analyze_param_vs_gradients(params_host, g_update, params )
-            params_host = [p -  g for p,g in zip(params_host, g_update)]
-            # self.analyze_net_params(params_host)
-            self.set_params(params, params_host) # copyback
+            # Inside model the data are interpreted as [ndata x dim]
+            self.do_opt(alldata)
+            # deprecated
+            # steps = self.get_search_steps()
+            # compute_time_py = time()
+            # self.train_net.set_train_mode(train=True)
+            # self.eval_net.set_train_mode(train=True)
+            # cur_gradiens = self.call_func(self.grad_func, alldata)
+            # params = self.train_net.params
+            # params_eps = [e.get_value() for e in self.train_net.params_eps]
+            # params_host = [v.get_value(borrow=False) for v in params] # backup
+            # cost_list = []
+            # n_data = alldata[0].shape[0]
+            # for s in steps:
+            #     ss = s # no need to do the normalization any more
+            #     inner_params_host = [p - (ss * eps) * g for p,g,eps in zip(params_host,
+            #                                                                cur_gradiens,
+            #                                                                params_eps)]
+            #     self.set_params(params, inner_params_host)
+            #     cur_cost = self.call_func(self.test_func, alldata)
+            #     cost_list += [cur_cost[0]]
+            # min_idx = np.argmin(cost_list)
+            # best_step = steps[min_idx]
+            # print 'cost = {} \t [max: {}]'.format(cost_list[min_idx], max(cost_list))
+            
+            # self.train_error.append({'mmcost':cost_list[min_idx]})
+            # # self.print_layer_outputs(alldata)
+            # # update params_host
+            # g_update = [(best_step * eps) * g for g,eps in zip(cur_gradiens, params_eps)]
+            # print 'best step is {}'.format(best_step)
+            # self.analyze_param_vs_gradients(params_host, g_update, params )
+            # params_host = [p -  g for p,g in zip(params_host, g_update)]
+            # # self.analyze_net_params(params_host)
+            # self.set_params(params, params_host) # copyback
             print 'analyze_num_sv---train'
             self.analyze_num_sv(alldata)
-            print 'Searching step (%.3f sec)' % (time()- compute_time_py)
+            
             compute_time_py = time()
             cur_batch_done = self.get_num_batches_done(True)
             save_batch_idx = (cur_batch_done // self.testing_freq ) * self.testing_freq
@@ -1139,29 +1179,40 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
     def do_opt(self, mv_input_data):
         if self.opt_method == 'bp':
             self.lr.set_value(np.cast[theano.config.floatX](1.0))
-            info = self.train_func(*mv_input_data)
+            info_list = [self.train_func(*mv_input_data) for k in range(self.opt_num)]
+            info = info_list[-1]
         else: # Do line search ha ha ha
-            steps = self.get_search_steps() 
-            cur_gradients = self.train_grad_func(*mv_input_data) 
-            params = self.train_net.params
+            steps = self.get_search_steps()
             params_eps = [e.get_value(borrow=False) for e in self.train_net.params_eps]
+            params = self.train_net.params
             params_host = [v.get_value(borrow=False) for v in params]
-            cost_list = []
-            n_data = mv_input_data[0].shape[0]
-            for s in steps:
-                ss = s 
-                inner_params_host = [p - (ss * eps) * g for p,g, eps in zip(params_host,
-                                                                            cur_gradients,
-                                                                            params_eps)]
-                self.set_params(params, inner_params_host)
-                cur_cost = self.train_cost_func(*mv_input_data)
-                cost_list.append(cur_cost[0])
-            min_idx = np.argmin(cost_list)
-            best_step = steps[min_idx]
-            print '    Cost = {} \t [max :{}]'.format(cost_list[min_idx], max(cost_list))
-            print '    best step = {}'.format(best_step)
-            self.lr.set_value(np.cast[theano.config.floatX](best_step))
-            info = self.train_func(*mv_input_data)
+
+            for k in range(self.opt_num):
+                cur_gradients = self.train_grad_func(*mv_input_data) 
+                cost_list = []
+                n_data = mv_input_data[0].shape[0]
+                for s in steps:
+                    ss = s 
+                    inner_params_host = [p - (ss * eps) * g for p,g, eps in zip(params_host,
+                                                                                cur_gradients,
+                                                                                params_eps)]
+                    self.set_params(params, inner_params_host)
+                    cur_cost = self.train_cost_func(*mv_input_data)
+                    cost_list.append(cur_cost[0])
+                min_idx = np.argmin(cost_list)
+                best_step = steps[min_idx]
+                print '    Cost = {} \t [max :{}]'.format(cost_list[min_idx], max(cost_list))
+                print '    best step = {}'.format(best_step)
+                if k == self.opt_num - 1:
+                    self.lr.set_value(np.cast[theano.config.floatX](best_step))
+                    info = self.train_func(*mv_input_data)
+                else:
+                    inner_params_host = [p - (best_step * eps) * g for p,g, eps in
+                                         zip(params_host,
+                                             cur_gradients,
+                                             params_eps)]
+                    params_host = inner_params_host
+                    self.set_params(params, inner_params_host)
         return info
     def train(self):
         cumulate_update_num = self.solver_params['cumulate_update_num']
@@ -1283,7 +1334,8 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         net_dic['score_net']['layers'] = net_dic['train_net']['layers']
         net_dic['feature_net']['layers'] = net_dic['train_net']['layers']
         model_state = {'train': self.train_dp.get_state_dic(),
-                       'test':self.test_dp.get_state_dic()}
+                       'test':self.test_dp.get_state_dic(),
+                       'state':self.stat}
         solver_params = self.solver_params
         solver_params['train_error'] = self.train_error
         solver_params['test_error'] = self.test_error

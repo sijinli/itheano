@@ -9,6 +9,7 @@ import iutils as iu
 import options
 from time import time
 import imgproc
+
 def get_cost(d, key, cost_name):
     if key in d['model_state']:
         l = d['model_state'][key]
@@ -93,15 +94,59 @@ def process(op):
     if save_path:
         imgproc.imsave_tight(save_path)
     pl.show()
+
+def show_cnn_filters(lay, op):
+    # The filter shape is numfilter  x input_dimension  x sy  x sx
+    weights = lay['weights']
+    idx = op.get_value('weight_idx')
+    W = weights[idx]
+    nfilter, ndim, SY, SX = W.shape
+    n_col = 8
+    n_row = (nfilter - 1) // n_col + 1
+    nc = 0
+    fig = pl.figure()
+    for r in range(n_row):
+        for c in range(n_col):
+            ax = fig.add_subplot(n_row, n_col, nc + 1)
+            curF = W[nc, ...]
+            img = curF.transpose([1,2,0]) if curF.shape[0] == 3 else curF.mean(axis=0)
+            ax.imshow(imgproc.maptorange(-img, [0,1]))
+            iu.print_common_statistics(img)
+            pl.title('filter idx {:02d}'.format(nc))
+            nc = nc + 1
+    pl.show()
     
+def show_fc_filters(lay, op):
+    pass
+def show_filter(op):
+    import isolver
+    lay_name = op.get_value('layer_name')
+    data_folder = op.get_value('load_file')
+    model = isolver.Solver.get_saved_model(data_folder)
+    layers = model['net_dic'].items()[0][1]['layers']
+    cur_lay = layers[lay_name][2]
+    print 'Processing layer: {}'.format(lay_name)
+    print 'Layer type is {}'.format(cur_lay['type'])
+    t = cur_lay['type']
+    if t in 'convdnn':
+        show_cnn_filters(cur_lay, op)
+    else:
+        show_fc_filters(cur_lay,op)
 def main():
     op = options.OptionsParser()
     op.add_option('load-file', 'load_file', options.StringOptionParser, 'load file folder', default=None,excuses=options.OptionsParser.EXCLUDE_ALL)
     op.add_option('cost-name', 'cost_name', options.StringOptionParser, 'the cost name', default=None)
     op.add_option('save-path', 'save_path', options.StringOptionParser, 'The path to save plot', default=None)
+    op.add_option('mode', 'mode', options.StringOptionParser, 'The mode of plot', default='show_cost')
+    op.add_option('layer-name','layer_name', options.StringOptionParser, 'The layer to be analyzed', default=None)
+    op.add_option('weight-idx', 'weight_idx', options.IntegerOptionParser, 'The index of filter to be displayed', default=0)
     op.parse()
     op.eval_expr_defaults()
-    process(op)
-
+    mode = op.get_value('mode')
+    if mode == 'show_cost':
+        process(op)
+    elif mode == 'show_filter':
+        show_filter(op)
+        
 if __name__ == '__main__':
     main()

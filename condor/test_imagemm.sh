@@ -1,7 +1,7 @@
 exp_name=ASM_act_14_exp_2
 DP=croppedjt
 macid=13
-JT=0047
+JT=0042
 EP=200
 BSIZE=128
 run_mac=c8k${macid}
@@ -10,14 +10,14 @@ KMV=10
 MAXNUM=10
 TrainRange=0-132743
 TestRange=132744-162007
-save_name=2015_03_27_0047_pca_noise_test
-EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-feat-pca-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_ASM_act_14_exp_2/rel_pca.meta --candidate-feat-pca-noise=0.0003'
+save_name=2015_04_03_0042_optnum_3_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
 TF=5
 
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 
-
 RELOAD=--load-file=/opt/visal/tmp/for_sijin/Data/saved/Test/${save_name}
+
 
 ${EXE} /home/grads/sijinli2/Projects/Itheano/Python/task/train_imgmm.py --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_${exp_name} --num-epoch=${EP} --data-provider=${DP} --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_${JT}.cfg --testing-freq=${TF} --batch-size=${BSIZE} --train-range=${TrainRange} --test-range=${TestRange} --save-path=/opt/visal/tmp/for_sijin/Data/saved/Test/${save_name} --K-candidate=${KC} --K-most-violated=${KMV} --max-num=${MAXNUM} --solver-type=imgmm ${EXTRA} 
 

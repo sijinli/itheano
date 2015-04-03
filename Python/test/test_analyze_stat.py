@@ -48,6 +48,7 @@ def show_the_most_violated_poses():
 def show_stat_most_violated_indexes():
     saved_model_path = '/public/sijinli2/ibuffer/2015-01-16/net2_test_for_stat'
     saved_model_path = '/opt/visal/tmp/for_sijin/Data/saved/theano_models/FCJ0_act_14_graph_0029_test_norm_cumulate_update_eval/'
+    saved_model_path = '/opt/visal/tmp/for_sijin/Data/saved/Test/2015_03_30_0051_test/'
     ssolver = Solver.get_saved_model(saved_model_path)
     stat = ssolver['model_state']['stat']
     cnt_sample = stat['sample_candidate_counts']
@@ -99,8 +100,8 @@ def test_tmp():
     
 def main():
     # test_tmp()
-    # show_stat_most_violated_indexes()
-    show_the_most_violated_poses()
+    show_stat_most_violated_indexes()
+    # show_the_most_violated_poses()
 
 
 if __name__ == '__main__':
