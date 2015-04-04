@@ -1523,8 +1523,29 @@ TestRange=132744-162007
 save_name=2015_01_01_0052_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
 TF=5
-
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_01_01_0052_test/20@939
+
+^_____The data is not right. OK
+
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0052
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_03_0052_optnum_5_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=5'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0052_optnum_5_test
+
+
 }
 
 
@@ -1546,6 +1567,11 @@ EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
 TF=5
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 /opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_02_0054_test/
+
+The performance for pose estimation get decreased.
+[
+11@72
+mpjpe as mv_margin is 92.2087596743]
 }
 
 RUN {
@@ -1574,11 +1600,99 @@ However, the prediction error is not good.
 mpjpe as mv_margin is 120.355821038
 ]
 
+[epoch 3
+mpjpe as mv_margin is 95.3777403681
+]
+
 }
 
 RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0042
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_03_0042_optnum_3_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
+TF=5
+
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0042_optnum_3_test/
+
+[1@7
+mpjpe as mv_margin is 88.0960167962
+]
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0056
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_03_0056_optnum_3_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0056_optnum_3_test/
+}
+
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0057
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=200
+KMV=10
+MAXNUM=10
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_04_0057_optnum_3_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_04_0057_optnum_3_test
 
 }
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0058
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=2000
+KMV=10
+MAXNUM=500
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_04_0058_optnum_3_test
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3 --candidate-mode=all'
+TF=5
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+
+}
+
+
+
+
 
 
 

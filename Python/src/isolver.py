@@ -575,7 +575,6 @@ class MMLSSolver(MMSolver):
         return [gt, imgfeature, gt_jtfeature, mv_jtfeature, margin0, margin1]
         """
         # K_candidate = self.solver_params['K_candidate']
-        
         self.eval_net.set_train_mode(train=False) # Always use the test mode for searching
         K_mv = self.solver_params['K_most_violated']
         if train:
@@ -587,6 +586,7 @@ class MMLSSolver(MMSolver):
         train_dp =  self.train_dp
         if (self.candidate_feat_E is not None) and train:
             # need to ensure it has max_depth
+            raise Exception('Not supported - It will not be usefull')
             feat_E = self.candidate_feat_E / train_dp.max_depth
         else:
             feat_E = None
@@ -605,6 +605,7 @@ class MMLSSolver(MMSolver):
         fl = self.get_all_candidates(train_dp)
         selected_indexes = []
         all_candidate_indexes = []
+        mvt_list = []
         for mb in range(num_mini_batch):
             start, end = mb * max_num, min(ndata, (mb + 1) * max_num)
             start_indexes, end_indexes = start * K_candidate, end * K_candidate
@@ -639,6 +640,7 @@ class MMLSSolver(MMSolver):
             
             selected_indexes += cur_candidate_indexes[m_indexes].tolist()
             all_candidate_indexes += [cur_candidate_indexes]
+            mvt_list.append(candidate_features[..., m_indexes])
         if train:
             most_violated_cnt, dummy = np.histogram(selected_indexes,bins=range(0, n_train + 1))
             self.stat['most_violated_counts'] += most_violated_cnt
@@ -688,8 +690,12 @@ class MMLSSolver(MMSolver):
         steps = self.get_search_steps()
         info = None
         for k in range(self.opt_num):
+            self.train_net.set_train_mode(train=True)
+            self.eval_net.set_train_mode(train=True)
             cur_gradiens = self.call_func(self.grad_func, alldata)
             cost_list = []
+            self.train_net.set_train_mode(train=False)
+            self.eval_net.set_train_mode(train=False)
             for s in steps:
                 ss = s # no need to do the normalization any more
                 inner_params_host = [p - (ss * eps) * g for p,g,eps in zip(params_host,
@@ -1112,6 +1118,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         fl = self.get_all_candidates(dp)
         selected_indexes = []
         all_candidate_indexes = []
+        mvt_list = []
         for mb in range(num_mini_batch):
             start, end = mb * max_num, min(ndata, (mb + 1) * max_num)
             start_indexes, end_indexes = start * K_candidate, end * K_candidate
@@ -1142,21 +1149,26 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
             
             outputs = self.eval_func(*alldata)[0]
             outputs = outputs.reshape((K_tot, cur_num),order='F')
-            # m_indexes = np.argmax(outputs, axis=0).flatten() + \
-            #             np.array(range(0, cur_num)) * K_tot
-            ##@@ 
-            m_indexes = np.argpartition(-outputs, K_update, axis=0)[:K_update,:] + np.array(range(0, cur_num)).reshape((1,-1),order='F') * K_tot
+            ##@@
+            m_indexes_raw = np.argpartition(-outputs, K_update, axis=0)[:K_update,:] 
+            m_indexes = m_indexes_raw + np.array(range(0, cur_num)).reshape((1,-1),order='F') * K_tot
             m_indexes = m_indexes.flatten(order='F')
             ##
-            selected_indexes += cur_candidate_indexes[m_indexes].tolist()
+            cur_select = cur_candidate_indexes[m_indexes].tolist()
+            selected_indexes += cur_select
+            mvt_list.append(candidate_targest[..., m_indexes])
             all_candidate_indexes += [cur_candidate_indexes]
         if train:
             most_violated_cnt, dummy = np.histogram(selected_indexes,bins=range(0, n_train + 1))
             self.stat['most_violated_counts'] = self.stat['most_violated_counts'] + most_violated_cnt
             
         # most_violated_features = fl[0][..., selected_indexes]
-        most_violated_targets = fl[0][..., selected_indexes]
-
+        # most_violated_targets = fl[0][..., selected_indexes]
+        most_violated_targets = np.concatenate(mvt_list, axis=1)
+        assert(most_violated_targets.shape[-1] == len(selected_indexes))
+        
+        raise Exception('Bug Here Notice || MMLSSolver has the same problem')
+        
         ##@
         if K_update != 1:
             gt = np.tile(fdata[1], [K_update,1]).reshape((-1, K_update * ndata),order='F')
@@ -1188,7 +1200,9 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
             params_host = [v.get_value(borrow=False) for v in params]
 
             for k in range(self.opt_num):
-                cur_gradients = self.train_grad_func(*mv_input_data) 
+                self.set_train_mode(train=True)
+                cur_gradients = self.train_grad_func(*mv_input_data)
+                self.set_train_mode(train=False)
                 cost_list = []
                 n_data = mv_input_data[0].shape[0]
                 for s in steps:
@@ -1341,5 +1355,194 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         solver_params['test_error'] = self.test_error
         to_save = {'net_dic':net_dic, 'model_state':model_state, 'solver_params':solver_params}
         self._save(to_save)
+class ImageDotProdMMSolver(ImageMMSolver):
+    """
+    The score can be represented by the dot product of the image features and the target featur    es
+    train_net       : inputs=img, gt_target, candidate_target, margin_gt, margin_candidate, ...
+    feature_net     : inputs=img
+    target_trans_net: inputs=gt_target
+
+    train_func < -------  train_net
+    test_func  < -------  train_net
+    calc_img_feature_unc <---- feature_net
+    train_forward_func < ------ train_net  get the output of maxmargin cost layer
+    """
+    _solver_type='imgdotprodmm'
+    def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
+        Solver.__init__(self, net_obj_list, train_dp, test_dp, solver_params)
+        self.train_net, self.feature_net, self.target_trans_net = net_obj_list
+        self.net_obj_list = net_obj_list
+        self.lr = theano.shared(np.cast[theano.config.floatX](1.0))
+        self.grads = tensor.grad(self.train_net.costs[0], self.train_net.params)
+        self.opt_method = self.solver_params['opt_method']
+        if self.opt_method == 'bp':
+            p_inc_new = [p_inc * mom - (self.lr * eps) * g for p_inc, mom, eps, g in
+                         zip(self.train_net.params_inc, self.train_net.params_mom,
+                             self.train_net.params_eps, self.grads)]
+        else:
+            assert(self.opt_method == 'ls')
+            p_inc_new = [ - (self.lr * eps) * g for  eps, g in
+                         zip(self.train_net.params_eps, self.grads)]
+        param_updates = [ (p, p + inc) for p, inc in zip(self.train_net.params, p_inc_new)]
+        param_inc_updates = [(p_inc, inc) for p_inc, inc in zip(self.train_net.params_inc,
+                                                                p_inc_new)]
+        self.monitor_list = self.train_net.cost_list + \
+                            [abs(p).mean() for p in self.train_net.params] +\
+                            [abs(g).mean() for g in p_inc_new]
+        self.monitor_idx = np.cumsum([0, len(self.train_net.cost_list),
+                            len(self.train_net.params), len(p_inc_new)])
+        self.monitor_name = ['cost_list', 'mean_weights', 'mean_inc']
+        self.train_func = theano.function(inputs=self.train_net.inputs,
+                                          outputs=self.monitor_list,
+                                          updates=param_updates + param_inc_updates,
+        )
+        self.train_cost_func = theano.function(inputs=self.train_net.inputs,
+                                               outputs=self.train_net.costs)
+        self.train_grad_func = theano.function(inputs=self.train_net.inputs,
+                                               outputs=self.grads)
+        self.test_func = theano.function(inputs=self.train_net.inputs,
+                                         outputs= self.train_net.cost_list)
+        self.grad_check_func = theano.function(inputs=self.train_net.inputs,
+                                               outputs=p_inc_new)
+        self.calc_img_feature_func = theano.function(inputs=self.feature_net.inputs,
+                                                     outputs=self.feature_net.outputs)
+        self.calc_target_feature_func = theano.function(inputs=self.target_trans_net.inputs,
+                                                        outputs =self.target_trans_net.outputs
+        )
+        XX,YY = tensor.fmatrix('XX_tmp'), tensor.fmatrix('YY_tmp')
+        self.dot_func = theano.function(inputs=[XX,YY], outputs = [theano.dot(XX,YY)])
+        flayer_name = 'net2_mmcost'
+        self.train_forward_func = theano.function(inputs=self.train_net.inputs,
+                                                  outputs=self.train_net.layers[flayer_name][2].outputs)
+        self.margin_dim = self.train_net.layers[flayer_name][2].param_dic['margin_dim']
+        assert(self.margin_dim == 1)
+        self.data_idx = self.train_net.data_idx
+        self.stat = dict()
+        n_train = len(self.train_dp.data_range)
+        self.stat['sample_candidate_counts'] = np.zeros((n_train))  #
+        self.stat['most_violated_counts'] = np.zeros((n_train))
+        self.cur_batch_indexes = None
+    def create_candidate_indexes(self, ndata, dp, train):
+        data_range = dp.data_range
+        n_train = len(data_range)
+        candidate_mode = self.solver_params['candidate_mode']
+        if candidate_mode == 'all':
+            K_candidate = n_train
+            indexes = np.array(range(0, n_train))
+        elif candidate_mode == 'random2':
+            K_candidate = self.solver_params['K_candidate']
+            assert(K_candidate < n_train)
+            indexes = np.asarray(np.random.choice(range(0, n_train), size=K_candidate, replace=False))
+        else:
+            raise Exception('No candidate mode named {}'.format(candidate_mode))
+        return K_candidate, indexes
+    def calc_dot(self, X,Y):
+        return self.dot_func(self.gpu_require(X), self.gpu_require(Y))[0]        
+    def find_most_violated_ext(self, fdata, use_zero_margin=False, train=True):
+        """
+        fdata: [imgfeature, gt_target]
+        return [imgfeature, gt_target, mv_target, gt_margin, mv_margin]
+        """
+        self.set_train_mode(False)
+        assert(self.margin_dim == 1)
+        K_mv = self.solver_params['K_most_violated']
+        if train:
+            K_update = self.solver_params['K_top_update']
+        else:
+            K_update = 1
+        max_num = int(self.solver_params['max_num'])
+        # calc_margin here
+        calc_margin = (lambda R:self.zero_margin(R, self.margin_dim)) if use_zero_margin else self.margin_func
+        dp = self.train_dp
+        if (self.candidate_feat_E is not None)  and train:
+            feat_E = self.candidate_feat_E / dp.max_depth
+        else:
+            feat_E = None
+        n_train = len(dp.data_range)
+        ndata = fdata[0].shape[-1]
+        # Note that: the max_num has different meaning as ImageMMSolver
+      
+        K_candidate, candidate_indexes  = self.create_candidate_indexes(ndata, dp, train)
+        assert( candidate_indexes.size == K_candidate)
+        if train:
+            cur_counts, dummy = np.histogram(candidate_indexes, bins=range(0, n_train + 1))
+            self.stat['sample_candidate_counts'] = self.stat['sample_candidate_counts'] + cur_counts
+        if self.solver_params['candidate_mode'] != 'all':
+            mvc = self.stat['most_violated_counts']
+            sorted_indexes = sorted(range(n_train), key=lambda k:mvc[k],reverse=True)
+            holdon_indexes = np.array(sorted_indexes[:K_mv]).flatten()            
+            all_candidate_indexes = np.concatenate([candidate_indexes.flatten(), holdon_indexes])
+            K_tot = K_candidate + K_mv
+        else:
+            all_candidate_indexes = candidate_indexes.flatten()
+            K_tot = K_candidate
+        fl = self.get_all_candidates(dp)
+        all_candidate_targets = fl[0][..., all_candidate_indexes]
+        if feat_E is not None:
+            dim_X = all_candidate_targets.shape[0]
+            all_candidate_targets = all_candidate_targets + np.dot(feat_E, np.random.randn(dimX, K_tot))
+        imgfeatures, gt_target = fdata[0], fdata[1]
+        score_collect_list = []
+        all_targets_list = []
+        itm = iu.itimer()
+        itm.restart()
+        num_mini_batch = (K_tot - 1)  // max_num + 1 
+        print 'There are {} mini_batches'.format(num_mini_batch)
+        # itm.addtag('Begin')
+        for mb in range(num_mini_batch):
+            # divide the candidate set instead of the samples
+            # Because bathc size is always smaller
+            start, end = mb * max_num, min(K_tot, (mb + 1) * max_num)
+            candidate_targets = all_candidate_targets[..., start:end].reshape((-1,end-start),order='F')
+            
+            candidate_features_T = self.calc_target_feature_func(self.gpu_require(candidate_targets.T))[0]
+            
+            # raw_score is n_candidate x ndata
+            raw_score = self.calc_dot(candidate_features_T, imgfeatures)
+            # itm.addtag('after dot ---{}'.format(mb))
+            score_collect_list.append(raw_score)
+        # itm.addtag('find mvc')
+        raw_score_mat = np.concatenate(score_collect_list, axis=0)
+        if not use_zero_margin:
+            margin_mat = np.concatenate([calc_margin(all_candidate_targets - gt_target[...,k].reshape((-1,1),order='F') ) for k in range(ndata)],axis=0).T
+            score_mat = raw_score_mat + margin_mat
+        else:
+            score_mat= raw_score_mat
+        # itm.addtag('Finished')
+        # itm.print_all()
+        # print 'score_mat shape is {}'.format(score_mat.shape)
+        m_indexes = np.argpartition(-score_mat, K_update, axis=0)[:K_update,:].flatten(order='F')
+        # print 'm_indexes.shape  = {}\t K_update x ndata = {}'.format(m_indexes.shape, K_update * ndata)
+        selected_indexes = all_candidate_indexes[m_indexes]
+        most_violated_targets = all_candidate_targets[..., m_indexes]
+        if train:
+            most_violated_cnt, dummy = np.histogram(selected_indexes,bins=range(0, n_train + 1))
+            self.stat['most_violated_counts'] = self.stat['most_violated_counts'] + most_violated_cnt
+        if K_update != 1:
+            gt = np.tile(fdata[1], [K_update,1]).reshape((-1, K_update * ndata),order='F')
+            imgfeats = np.tile(fdata[0], [K_update,1]).reshape((-1, K_update*ndata),order='F')
+        else:
+            imgfeats,gt = fdata[0],fdata[1]
+        mv_margin = self.margin_func(most_violated_targets - gt_target)
+        gt_margin = np.zeros((self.margin_dim, K_update* ndata), dtype=np.float32)
+        alldata = [imgfeats, gt, most_violated_targets, gt_margin, mv_margin]
+        all_candidate_indexes_ext = np.tile(all_candidate_indexes.reshape((-1,1),order='F'), [1, ndata])
+        # print 'all_ext_shape {}'.format(all_candidate_indexes_ext.shape)
+        return alldata, [most_violated_targets, all_candidate_indexes_ext, selected_indexes]
         
-solver_dic = {'basicbp':BasicBPSolver, 'mmls':MMLSSolver, 'imgmm':ImageMMSolver} 
+    def save_model(self):
+        ignore=set(['layers'])
+        net_dic = {'train_net': self.train_net.save_to_dic(),
+                   'feature_net': self.feature_net.save_to_dic(ignore=ignore),
+                   'target_trans_net': self.target_trans_net.save_to_dic(ignore=ignore)}
+        net_dic['target_trans_net']['layers'] = net_dic['train_net']['layers']
+        net_dic['feature_net']['layers'] = net_dic['train_net']['layers']
+        model_state = {'train': self.train_dp.get_state_dic(),
+                       'test':self.test_dp.get_state_dic(),
+                       'state':self.stat}
+        solver_params = self.solver_params
+        solver_params['train_error'] = self.train_error
+        solver_params['test_error'] = self.test_error
+        to_save = {'net_dic':net_dic, 'model_state':model_state, 'solver_params':solver_params}
+        self._save(to_save)
+solver_dic = {'basicbp':BasicBPSolver, 'mmls':MMLSSolver, 'imgmm':ImageMMSolver, 'imgdpmm':ImageDotProdMMSolver} 

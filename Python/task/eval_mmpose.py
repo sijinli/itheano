@@ -570,7 +570,7 @@ def test_tmp():
     print d1['gt_score'][[0,1,2,3,4,5],0]
     print d2['gt_score'][[0,1,2,3,4,5],0]
 class MMEvalPoseLoader(MMSolverLoader):
-    _inner_loader_dic = {'mmls': MMLSSolverLoader, 'imgmm':ImageMMSolverLoader}
+    _inner_loader_dic = {'mmls': MMLSSolverLoader, 'imgmm':ImageMMSolverLoader, 'imgdpmm':ImageDotProdMMSolverLoader}
     @classmethod
     def add_extra_op(cls, op):
         op.add_option('mode', 'mode', options.StringOptionParser, 'the most for testing',default='shs')

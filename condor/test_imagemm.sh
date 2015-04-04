@@ -1,7 +1,7 @@
 exp_name=ASM_act_14_exp_2
 DP=croppedjt
 macid=13
-JT=0042
+JT=0057
 EP=200
 BSIZE=128
 run_mac=c8k${macid}
@@ -10,7 +10,7 @@ KMV=10
 MAXNUM=10
 TrainRange=0-132743
 TestRange=132744-162007
-save_name=2015_04_03_0042_optnum_3_test
+save_name=2015_04_04_0057_optnum_3_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
 TF=5
 
