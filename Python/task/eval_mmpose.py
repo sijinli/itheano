@@ -50,7 +50,7 @@ def get_feature_list(solver, dp):
         fl = solver.get_all_candidates(dp)
         return [fl[0],None, fl[0]]
 def get_eval_func(solver):
-    if solver._solver_type in ['mmls', 'imgmm']:
+    if solver._solver_type in ['mmls', 'imgmm', 'imgdpmm']:
         return solver.eval_func
     else:
         raise Exception('Can not find eval_func')
