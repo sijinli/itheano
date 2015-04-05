@@ -13,13 +13,12 @@ TestRange=132744-162007
 save_name=2015_04_04_0057_optnum_3_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
 TF=5
-
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
 
 RELOAD=--load-file=/opt/visal/tmp/for_sijin/Data/saved/Test/${save_name}
 
 
-${EXE} /home/grads/sijinli2/Projects/Itheano/Python/task/train_imgmm.py --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_${exp_name} --num-epoch=${EP} --data-provider=${DP} --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_${JT}.cfg --testing-freq=${TF} --batch-size=${BSIZE} --train-range=${TrainRange} --test-range=${TestRange} --save-path=/opt/visal/tmp/for_sijin/Data/saved/Test/${save_name} --K-candidate=${KC} --K-most-violated=${KMV} --max-num=${MAXNUM} --solver-type=imgmm ${EXTRA} 
+${EXE} /home/grads/sijinli2/Projects/Itheano/Python/task/train_imgmm.py --data-path=/opt/visal/tmp/for_sijin/Data/H36M/H36MExp/folder_${exp_name} --num-epoch=${EP} --data-provider=${DP} --layer-def=/home/grads/sijinli2/Projects/Itheano/doc/netdef/graph_def_${JT}.cfg --testing-freq=${TF} --batch-size=${BSIZE} --train-range=${TrainRange} --test-range=${TestRange} --save-path=/opt/visal/tmp/for_sijin/Data/saved/Test/${save_name} --K-candidate=${KC} --K-most-violated=${KMV} --max-num=${MAXNUM} --solver-type=imgmm ${EXTRA} ${RELOAD}
 
 
 ## for HumanEva_exp_1

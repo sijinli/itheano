@@ -1545,6 +1545,9 @@ EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=5'
 TF=5
 /opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0052_optnum_5_test
 
+[7@288
+mpjpe as mv_margin is 105.431253154
+]
 
 }
 
@@ -1562,7 +1565,7 @@ KMV=10
 MAXNUM=10
 TrainRange=0-132743
 TestRange=132744-162007
-save_name=2015_04_02_0053_test
+save_name=2015_04_02_0054_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
 TF=5
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
@@ -1572,6 +1575,11 @@ The performance for pose estimation get decreased.
 [
 11@72
 mpjpe as mv_margin is 92.2087596743]
+
+[45@990
+mpjpe as mv_margin is 100.677023185
+]
+
 }
 
 RUN {
@@ -1604,6 +1612,10 @@ mpjpe as mv_margin is 120.355821038
 mpjpe as mv_margin is 95.3777403681
 ]
 
+[
+mpjpe as mv_margin is 91.5595481013
+]
+
 }
 
 RUN {
@@ -1628,6 +1640,7 @@ TF=5
 [1@7
 mpjpe as mv_margin is 88.0960167962
 ]
+
 }
 
 RUN {
@@ -1647,6 +1660,12 @@ save_name=2015_04_03_0056_optnum_3_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
 TF=5
 /opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0056_optnum_3_test/
+
+[
+11@371
+mpjpe as mv_margin is 100.813919895
+]
+
 }
 
 
@@ -1667,6 +1686,10 @@ save_name=2015_04_04_0057_optnum_3_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
 TF=5
 /opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_04_0057_optnum_3_test
+
+[7@309
+mpjpe as mv_margin is 98.1097303236
+]
 
 }
 

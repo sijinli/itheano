@@ -1156,7 +1156,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
             ##
             cur_select = cur_candidate_indexes[m_indexes].tolist()
             selected_indexes += cur_select
-            mvt_list.append(candidate_targest[..., m_indexes])
+            mvt_list.append(candidate_targets[..., m_indexes])
             all_candidate_indexes += [cur_candidate_indexes]
         if train:
             most_violated_cnt, dummy = np.histogram(selected_indexes,bins=range(0, n_train + 1))
@@ -1166,9 +1166,6 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         # most_violated_targets = fl[0][..., selected_indexes]
         most_violated_targets = np.concatenate(mvt_list, axis=1)
         assert(most_violated_targets.shape[-1] == len(selected_indexes))
-        
-        raise Exception('Bug Here Notice || MMLSSolver has the same problem')
-        
         ##@
         if K_update != 1:
             gt = np.tile(fdata[1], [K_update,1]).reshape((-1, K_update * ndata),order='F')
@@ -1190,6 +1187,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         return np.power(10.0,range(-num_step,3))
     def do_opt(self, mv_input_data):
         if self.opt_method == 'bp':
+            self.set_train_mode(train=True)
             self.lr.set_value(np.cast[theano.config.floatX](1.0))
             info_list = [self.train_func(*mv_input_data) for k in range(self.opt_num)]
             info = info_list[-1]
@@ -1198,11 +1196,9 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
             params_eps = [e.get_value(borrow=False) for e in self.train_net.params_eps]
             params = self.train_net.params
             params_host = [v.get_value(borrow=False) for v in params]
-
+            self.set_train_mode(train=False)
             for k in range(self.opt_num):
-                self.set_train_mode(train=True)
                 cur_gradients = self.train_grad_func(*mv_input_data)
-                self.set_train_mode(train=False)
                 cost_list = []
                 n_data = mv_input_data[0].shape[0]
                 for s in steps:
@@ -1218,6 +1214,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                 print '    Cost = {} \t [max :{}]'.format(cost_list[min_idx], max(cost_list))
                 print '    best step = {}'.format(best_step)
                 if k == self.opt_num - 1:
+                    self.set_train_mode(train=True)
                     self.lr.set_value(np.cast[theano.config.floatX](best_step))
                     info = self.train_func(*mv_input_data)
                 else:
