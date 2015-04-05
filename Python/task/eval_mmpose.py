@@ -91,7 +91,7 @@ def get_fdata(solver, data):
     return fdata
 def parse_mvdata(solver, alldata):
     # return img_feature, gt_target, gt_margin, gt_feature, mv_features, mv_margin
-    if solver._solver_type == 'imgmm':
+    if solver._solver_type in ['imgmm','imgdpmm']:
         return alldata[0], alldata[1], alldata[3], alldata[1], alldata[2], alldata[4]
     else:
         return alldata[1], alldata[0], alldata[4], alldata[2], alldata[3], alldata[5]
@@ -129,10 +129,13 @@ def show_highest_score(train, solver, op):
     indexes = dp.get_batch_indexes()
     print indexes[:10], '<<<<<<<<<<<<<<<INdexes'
     fdata = get_fdata(solver, data)
+    itm = iu.itimer()
+    itm.restart()
+    itm.addtag('begin')
     alldata, ext_data  = solver.find_most_violated_ext(fdata,use_zero_margin=True,
                                                                train=False
     )
-
+    itm.addtag('find most violated ext')
     mv_target, batch_candidate_indexes = ext_data[0], ext_data[1]
     img_features, gt_target, gt_margin, gt_features, mv_features, mv_margin = parse_mvdata(solver, alldata)
 
@@ -140,10 +143,11 @@ def show_highest_score(train, solver, op):
     batch_candidate_targets = fl[0][...,batch_candidate_indexes]
     ndata = gt_target.shape[-1]
     res_mpjpe, bmi  =  get_batch_best_match(batch_candidate_targets, gt_target, solver)
+    itm.addtag('get batch best match')
     bmi_raw = batch_candidate_indexes[bmi]
     bm_features = fl[2][..., bmi_raw]
     bm_targets  = fl[0][..., bmi_raw]
-    
+    itm.print_all()
     residuals = bm_targets - gt_target
     mpjpe = dutils.calc_mpjpe_from_residual(residuals, 17) # mpjpe for best match
     print 'Residuals for best match poses {}'.format(mpjpe.mean()* 1200)
@@ -598,9 +602,9 @@ def main():
     loader = MMEvalPoseLoader()
     solver = loader.parse()
     # solver.solver_params['candidate_mode'] = 'all'
-    solver.solver_params['candidate_mode'] = 'random2'
+    # solver.solver_params['candidate_mode'] = 'random2'
     solver.solver_params['K_candidate'] = 20000
-    solver.solver_params['max_num'] = 1
+    solver.solver_params['max_num'] = 500
     solver.solver_params['K_top_update'] = 1
     mode = loader.op.get_value('mode')
     if mode == 'shs':

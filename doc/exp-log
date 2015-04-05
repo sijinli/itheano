@@ -1549,6 +1549,7 @@ TF=5
 mpjpe as mv_margin is 105.431253154
 ]
 
+[stopped]
 }
 
 
@@ -1635,11 +1636,15 @@ save_name=2015_04_03_0042_optnum_3_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
 TF=5
 
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0042_optnum_3_test/
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_04_03_0042_optnum_3_test/
 
 [1@7
 mpjpe as mv_margin is 88.0960167962
+19@33
+mpjpe as mv_margin is 93.9886519805
 ]
+
+[stopped]
 
 }
 
@@ -1664,6 +1669,12 @@ TF=5
 [
 11@371
 mpjpe as mv_margin is 100.813919895
+]
+
+[hmlpe part
+92.1529929624, 89.4377192393, ...
+The problem is that the error on the training set is about 55.
+The error is very big. The performance on pose estimation network is around 33.
 ]
 
 }
@@ -1710,6 +1721,16 @@ save_name=2015_04_04_0058_optnum_3_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3 --candidate-mode=all'
 TF=5
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+
+
+[epoch 1
+95.9241416239
+/*On training set
+Residuals for best match poses 9.56716374191e-06
+mpjpe as mv_margin is 59.3650274383
+*/
+]
+
 
 }
 

@@ -681,21 +681,17 @@ class MMLSSolver(MMSolver):
                                                                       avgg/avgw))
     def do_opt(self, alldata):
         compute_time_py = time()
-        self.train_net.set_train_mode(train=True)
-        self.eval_net.set_train_mode(train=True)
         params = self.train_net.params
         params_eps = [e.get_value() for e in self.train_net.params_eps]
         params_host = [v.get_value(borrow=False) for v in params] # backup
         n_data = alldata[0].shape[0]
         steps = self.get_search_steps()
         info = None
+        self.train_net.set_train_mode(train=False)
+        self.eval_net.set_train_mode(train=False)
         for k in range(self.opt_num):
-            self.train_net.set_train_mode(train=True)
-            self.eval_net.set_train_mode(train=True)
             cur_gradiens = self.call_func(self.grad_func, alldata)
             cost_list = []
-            self.train_net.set_train_mode(train=False)
-            self.eval_net.set_train_mode(train=False)
             for s in steps:
                 ss = s # no need to do the normalization any more
                 inner_params_host = [p - (ss * eps) * g for p,g,eps in zip(params_host,
@@ -709,6 +705,8 @@ class MMLSSolver(MMSolver):
             print '    cost = {} \t [max: {}]'.format(cost_list[min_idx], max(cost_list))
             print '    best step is {}'.format(best_step)
             if k == self.opt_num - 1:
+                self.train_net.set_train_mode(train=True)
+                self.eval_net.set_train_mode(train=True)
                 g_update = [(best_step * eps) * g for g,eps in zip(cur_gradiens, params_eps)]
                 self.analyze_param_vs_gradients(params_host, g_update, params )
                 params_host = [p -  g for p,g in zip(params_host, g_update)]
@@ -1363,8 +1361,9 @@ class ImageDotProdMMSolver(ImageMMSolver):
     test_func  < -------  train_net
     calc_img_feature_unc <---- feature_net
     train_forward_func < ------ train_net  get the output of maxmargin cost layer
+    eval_func <---------  target_trans_net (imgfeature,joints,margin) -> score
     """
-    _solver_type='imgdotprodmm'
+    _solver_type='imgdpmm'
     def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
         Solver.__init__(self, net_obj_list, train_dp, test_dp, solver_params)
         self.train_net, self.feature_net, self.target_trans_net = net_obj_list
@@ -1408,6 +1407,8 @@ class ImageDotProdMMSolver(ImageMMSolver):
         )
         XX,YY = tensor.fmatrix('XX_tmp'), tensor.fmatrix('YY_tmp')
         self.dot_func = theano.function(inputs=[XX,YY], outputs = [theano.dot(XX,YY)])
+
+        self.make_eval_func()
         flayer_name = 'net2_mmcost'
         self.train_forward_func = theano.function(inputs=self.train_net.inputs,
                                                   outputs=self.train_net.layers[flayer_name][2].outputs)
@@ -1419,6 +1420,14 @@ class ImageDotProdMMSolver(ImageMMSolver):
         self.stat['sample_candidate_counts'] = np.zeros((n_train))  #
         self.stat['most_violated_counts'] = np.zeros((n_train))
         self.cur_batch_indexes = None
+    def make_eval_func(self):
+        s_img_feature = tensor.fmatrix('s_img_feature_solver')
+        s_margin = tensor.fmatrix('s_margin_solver')
+        inputs = [s_img_feature, self.target_trans_net.inputs[0], s_margin]
+        outputs = [(self.target_trans_net.outputs[0] * s_img_feature).sum(axis=1,keepdims=True) + s_margin]
+        self.eval_func = theano.function(inputs=inputs, outputs=outputs)
+        
+        
     def create_candidate_indexes(self, ndata, dp, train):
         data_range = dp.data_range
         n_train = len(data_range)
@@ -1523,7 +1532,7 @@ class ImageDotProdMMSolver(ImageMMSolver):
         mv_margin = self.margin_func(most_violated_targets - gt_target)
         gt_margin = np.zeros((self.margin_dim, K_update* ndata), dtype=np.float32)
         alldata = [imgfeats, gt, most_violated_targets, gt_margin, mv_margin]
-        all_candidate_indexes_ext = np.tile(all_candidate_indexes.reshape((-1,1),order='F'), [1, ndata])
+        all_candidate_indexes_ext = np.tile(all_candidate_indexes.reshape((-1,1),order='F'), [1, ndata]).flatten(order='F')
         # print 'all_ext_shape {}'.format(all_candidate_indexes_ext.shape)
         return alldata, [most_violated_targets, all_candidate_indexes_ext, selected_indexes]
         
