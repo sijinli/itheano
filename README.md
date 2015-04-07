@@ -33,5 +33,5 @@
 
 ### Contact ###
 
-* Owner Sijin LI  (itsuper7@gmail.com)
-
+* Owner Sijin LI  (lisijin7@gmail.com)
+* https://sijinli.github.io/
