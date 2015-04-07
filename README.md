@@ -31,13 +31,7 @@
 
 
 
-### Contribution guidelines ###
-
-* Writing tests
-* Code review
-* Other guidelines
-
-### Who do I talk to? ###
+### Contact ###
 
 * Owner Sijin LI  (itsuper7@gmail.com)
-* Other community or team contact
+
