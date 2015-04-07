@@ -1,5 +1,0 @@
-from init_test import *
-
-
-def main():
-    test()
