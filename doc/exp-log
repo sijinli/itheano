@@ -1570,7 +1570,7 @@ save_name=2015_04_02_0054_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
 TF=5
 EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_02_0054_test/
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_04_02_0054_test/
 
 The performance for pose estimation get decreased.
 [
@@ -1580,6 +1580,7 @@ mpjpe as mv_margin is 92.2087596743]
 [45@990
 mpjpe as mv_margin is 100.677023185
 ]
+
 
 }
 
@@ -1599,7 +1600,7 @@ TestRange=132744-162007
 save_name=2015_04_03_0055_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls'
 TF=5
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0055_test/
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_04_03_0055_test/
 
 It is strange. The error on mmcost looks good. 
 
@@ -1616,6 +1617,7 @@ mpjpe as mv_margin is 95.3777403681
 [
 mpjpe as mv_margin is 91.5595481013
 ]
+
 
 }
 
@@ -1664,7 +1666,7 @@ TestRange=132744-162007
 save_name=2015_04_03_0056_optnum_3_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
 TF=5
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_03_0056_optnum_3_test/
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_04_03_0056_optnum_3_test/
 
 [
 11@371
@@ -1676,6 +1678,8 @@ mpjpe as mv_margin is 100.813919895
 The problem is that the error on the training set is about 55.
 The error is very big. The performance on pose estimation network is around 33.
 ]
+The result is not good althogh. 
+It is still decreasing. But too slow.
 
 }
 
@@ -1696,11 +1700,13 @@ TestRange=132744-162007
 save_name=2015_04_04_0057_optnum_3_test
 EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3'
 TF=5
-/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_04_0057_optnum_3_test
+/opt/visal/tmp/for_sijin/Data/saved/theano_models/2015_04_04_0057_optnum_3_test
 
 [7@309
 mpjpe as mv_margin is 98.1097303236
 ]
+
+[STOPPED]
 
 }
 
@@ -1735,8 +1741,121 @@ mpjpe as mv_margin is 59.3650274383
 }
 
 
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0060
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=2000
+KMV=10
+MAXNUM=500
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_05_0060
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls  --candidate-mode=all'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_05_0060
+}
 
 
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0061
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=2000
+KMV=10
+MAXNUM=500
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_05_0061_optnum_3
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3 --candidate-mode=all'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_05_0061_optnum_3/
+}
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0062
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=2000
+KMV=10
+MAXNUM=500
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_06_0062_optnum_3
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3 --candidate-mode=all'
+TF=5
+
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_06_0062_optnum_3/0@4
 
 
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0062
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=2000
+KMV=10
+MAXNUM=500
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_06_0062_optnum_3_random2
+EXTRA='--cumulate-update=2 --force-shuffle=1 --opt-method=ls --opt-num=3 --candidate-mode=random2'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_06_0062_optnum_3_random2
+
+
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0062
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=2000
+KMV=10
+MAXNUM=500
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_06_0062_random2_simple
+EXTRA='--force-shuffle=1 --opt-method=bp  --candidate-mode=random2'
+TF=5
+/opt/visal/tmp/for_sijin/Data/saved/Test/2015_04_06_0062_random2_simple/
+}
+
+
+RUN {
+exp_name=ASM_act_14_exp_2
+DP=croppedjt
+macid=13
+JT=0063
+EP=200
+BSIZE=128
+run_mac=c8k${macid}
+KC=2000
+KMV=10
+MAXNUM=500
+TrainRange=0-132743
+TestRange=132744-162007
+save_name=2015_04_06_0063_random2_simple
+EXTRA='--force-shuffle=1 --opt-method=ls  --candidate-mode=random2'
+
+TF=5
+EXE=/home/grads/sijinli2/pkg/anaconda/bin/python
+FILE=/home/grads/sijinli2/Projects/Itheano/Python/task/train_imgdpmm.py
+
+}
 

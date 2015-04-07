@@ -515,7 +515,7 @@ class DotProdParser(LayerParser):
         if len(dic['input_dims']) != 2:
             raise Exception('The input of layer {} should be 2'.format(dic['name']))
         if dic['input_dims'][0] != dic['input_dims'][1]:
-            raise Exception('The layers to be stacked does not have the same dimension \n {}'.format(dic['input_dims']))
+            raise Exception('The input for dot product layer should have the same dimension \n {}'.format(dic['input_dims']))
         return DotProdLayer(self.inputs, dic)
 class DotProdLayer(Layer):
     def __init__(self, inputs, param_dic=None):

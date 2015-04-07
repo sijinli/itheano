@@ -71,6 +71,7 @@ class SolverLoader(object):
     def load_data_dic(self, dp_params):
         return None
     def create_dp(self, op, saved_model = None):
+        print '-------{}-------'.format('Create data provider')
         try:
             if saved_model and 'dp_params' in saved_model['solver_params']:
                 dp_params = saved_model['solver_params']['dp_params']
@@ -112,6 +113,7 @@ class SolverLoader(object):
         test_dp = idata.dp_dic[dp_type](data_dic=data_dic, train=False, data_range=d['test_range'], params=test_param)
         return train_dp, test_dp, d
     def create_networks(self, op, saved_model):
+        print '-------{}-------'.format('Create network')
         try:
             cfg_file_path = op.get_value('layer_def')
             if not cfg_file_path:
@@ -143,6 +145,7 @@ class SolverLoader(object):
             return False
         return True
     def create_solver(self, op, net_dic, train_dp, test_dp, saved_model):
+        print '-------{}-------'.format('Create solver')
         saved_params = saved_model['solver_params'] if saved_model else dict()
         solver_params = dict()
         self.parse_solver_params(solver_params, op)
@@ -153,14 +156,16 @@ class SolverLoader(object):
         required_list = _cls._required_field
         default_dic = dict(_cls._default_list)
         # params in saved_params has least priority
-        
         for e in required_list:
             if (not e in solver_params) and self.is_valid_value(op, e):
                 solver_params[e] = op.get_value(e)
-            elif e in default_dic:
-                solver_params[e] = default_dic[e]
+                print '     : use new set \t{}: {}'.format(e, op.get_value(e))
             elif e in saved_params:
                 solver_params[e] = saved_params[e]
+                print '     : use saved \t{}: {}'.format(e, saved_params[e])
+            elif e in default_dic:
+                solver_params[e] = default_dic[e]
+                print '     : use default \t{}: {}'.format(e, default_dic[e])
         if 'net_order' in solver_params:
             net_list = [ net_dic[nname] for nname in solver_params['net_order']]
         else:
@@ -181,7 +186,7 @@ class MMSolverLoader(SolverLoader):
         op.add_option('K-top-update', 'K_top_update', options.IntegerOptionParser, 'Using the top K most violoated candidate for updating the cost', default=1)
         op.add_option('max-num', 'max_num', options.IntegerOptionParser, 'The maximum number of sample to be processed')
         op.add_option('margin-func', 'margin_func', options.StringOptionParser, 'the parameters for marginl', default='mpjpe')
-        op.add_option('candidate-mode', 'candidate_mode', options.StringOptionParser, 'the parameters for marginl', default='random')
+        op.add_option('candidate-mode', 'candidate_mode', options.StringOptionParser, 'the parameters for marginl', default='')
         op.add_option('cumulate-update-num', 'cumulate_update_num', options.IntegerOptionParser, 'the number of trial to cumulate data', default=-1)
         op.add_option('candidate-feat-pca-path', 'candidate_feat_pca_path', options.StringOptionParser, 'The path for storing the pca results of candidate features',default='')
         op.add_option('candidate-feat-pca-noise', 'candidate_feat_pca_noise', options.FloatOptionParser, 'The sigma level of pca', default=0)
@@ -1457,7 +1462,6 @@ class ImageDotProdMMSolver(ImageMMSolver):
         else:
             K_update = 1
         max_num = int(self.solver_params['max_num'])
-        # calc_margin here
         calc_margin = (lambda R:self.zero_margin(R, self.margin_dim)) if use_zero_margin else self.margin_func
         dp = self.train_dp
         if (self.candidate_feat_E is not None)  and train:

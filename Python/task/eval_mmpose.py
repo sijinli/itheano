@@ -474,14 +474,43 @@ def get_all_candidate(solver, dp, ndata):
     mvc = solver.stat['most_violated_counts']
     K_mv = solver.solver_params['K_most_violated']
     n_train = len(solver.train_dp.data_range)
-    sorted_indexes = sorted(range(n_train), key=lambda k:mvc[k],reverse=True)
-    holdon_indexes = np.array(sorted_indexes[:K_mv]).reshape((K_mv,1))           
-    return K_candidate + K_mv, np.concatenate([candidate_indexes.reshape((K_candidate,ndata),order='F'), np.tile(holdon_indexes, [1, ndata])], axis=0).flatten(order='F')
+    if solver._solver_type == 'imgdpmm':
+        if solver.solver_params['candidate_mode'] != 'all':
+            sorted_indexes = sorted(range(n_train), key=lambda k:mvc[k],reverse=True)
+            holdon_indexes = np.array(sorted_indexes[:K_mv]).flatten()
+            candidate_indexes = np.tile(np.concatenate([candidate_indexes.flatten(), holdon_indexes]).reshape((K_mv + K_candidate, 1),order='F'),[1, ndata]).flatten(order='F')
+            K_tot = K_candidate + K_mv
+        else:
+            candidate_indexes = np.tile(candidate_indexes.reshape((K_candidate,1),order='F'),
+                                        [1, ndata]).flatten(order='F')
+            K_tot = K_candidate
+        return K_tot, candidate_indexes
+    else:
+
+        sorted_indexes = sorted(range(n_train), key=lambda k:mvc[k],reverse=True)
+        holdon_indexes = np.array(sorted_indexes[:K_mv]).reshape((K_mv,1))           
+        return K_candidate + K_mv, np.concatenate([candidate_indexes.reshape((K_candidate,ndata),order='F'), np.tile(holdon_indexes, [1, ndata])], axis=0).flatten(order='F')
 def parse_fdata(fdata, solver):
     if solver._solver_type == 'mmls':
         return fdata[1], fdata[0]
     else:
         return fdata[0], fdata[1]
+def calc_candidate_target_feature_list(solver, train, op, targets, N_candidate):
+    solver.set_train_mode(train)
+    assert(train== False)
+    N = targets.shape[-1]
+    ndata = N / N_candidate
+    max_num = solver.solver_params['max_num']
+    def inner_calc(cur_targets):
+        s = cur_targets.shape[-1]
+        mini_batches = (s - 1) // max_num + 1
+        res_list = [solver.calc_target_feature_func(solver.gpu_require(cur_targets[..., k * max_num:min((k+1)*max_num, s)].T))[0].T for k in range(mini_batches)]
+        return np.concatenate(res_list, axis=1)
+    if solver.solver_params['candidate_mode'] == 'all':
+        feats = inner_calc(targets[..., :N_candidate])
+        return [feats for k in range(ndata)]
+    else:
+        return [inner_calc(targets[..., k * N_candidate:(k+1)*N_candidate]) for k in range(ndata)]
     
 def show_topK_pose_eval(solver, train, op):
     dp = solver.train_dp if train else solver.test_dp
@@ -489,7 +518,7 @@ def show_topK_pose_eval(solver, train, op):
     func = get_eval_func(solver)
     num_batch = dp.num_batch
     all_avg_mpjpe, all_top_mpjpe = [], []
-    save_path = '/public/sijinli2/ibuffer/2015-03-13/2015_03_17_0042_test/topK20'
+    # save_path = '/public/sijinli2/ibuffer/2015-03-13/2015_03_17_0042_test/topK20'
     save_folder = op.get_value('save_res_path')
     topK = 20
     if len(save_folder) == 0:
@@ -498,10 +527,12 @@ def show_topK_pose_eval(solver, train, op):
     iu.ensure_dir(save_folder)
     save_path = iu.fullfile(save_folder, 'topK_{}'.format(topK))
     dp.reset()
+    itm = iu.itimer()
     if iu.exists(save_path, 'file'):
         d = mio.unpickle(save_path)
-        all_avg_mpjpe = d['avg_mpjpe'].flatten().tolist()
-        all_top_mpjpe = d['top_mpjpe'].flatten().tolist()
+        if d['avg_mpjpe'] is not None:
+            all_avg_mpjpe = d['avg_mpjpe'].flatten().tolist()
+            all_top_mpjpe = d['top_mpjpe'].flatten().tolist()
     else:
         d = {'avg_mpjpe':None, 'top_mpjpe':None, 'finished':0}
         mio.pickle(save_path, d)
@@ -517,34 +548,61 @@ def show_topK_pose_eval(solver, train, op):
         img_features, gt_target = parse_fdata(fdata, solver)
         ndata = np.array(indexes).size
         N_candidate, batch_candidate_indexes_all = get_all_candidate(solver, dp, ndata)
+        
         fl = get_feature_list(solver, solver.train_dp)
         batch_candidate_targets = fl[0][...,batch_candidate_indexes_all]
         batch_candidate_features = fl[2][..., batch_candidate_indexes_all]
 
         top_list, avg_list = [], []
         print 'batch target {} \t features {} \t img_features {}'.format(batch_candidate_targets.shape, batch_candidate_features.shape, img_features.shape)
-        for b in range(ndata):
-            # print 'Process idx = {}\t (raw index = {})'.format(b, indexes[b])
-            cur_image_feature = img_features[..., b].reshape((-1,1),order='F')
-            imgfeatures = np.tile(cur_image_feature, [1, N_candidate])
-            s,e = N_candidate * b, N_candidate * (b + 1)
-            candidate_features= batch_candidate_features[..., s:e]
-            candidate_targets = batch_candidate_targets[...,s:e]
-            eval_input_data = [solver.gpu_require(imgfeatures.T),
-                               solver.gpu_require(candidate_features.T),
-                               solver.gpu_require(np.zeros((N_candidate,1)))]
+        
+        if solver._solver_type == 'imgdpmm':
+            itm.tic('calculate candidate features')
+            ctf_list = calc_candidate_target_feature_list(solver, train, op, batch_candidate_targets, N_candidate)
+            itm.toc()
+            # ^ dim x N_candidate x ndata ?
+            assert(len(ctf_list) == ndata)
+            # img_features  dim x ndata
+            compute_time_py = time()
+            score_list = [solver.dot_func(ctf_list[k].T, img_features[..., [k]])[0] for k in range(ndata)]
+            score_mat = np.concatenate(score_list, axis=1)
+            print 'score_mat.shape{}'.format(score_mat.shape)
+            print 'Calculate score cost {} seconds'.format(time() - compute_time_py)
+            sidx = np.argpartition(-score_mat, topK, axis=0)[:topK,:]
+            sidx_arr = sidx + np.array(range(0, ndata)).reshape((1,ndata)) * N_candidate
+            print 'sidx_arr.shape = {}'.format(sidx_arr.shape)
+            top_target = batch_candidate_targets[..., sidx_arr[0,...]]
+            avg_target_list = [  batch_candidate_targets[..., sidx_arr[...,k]].mean(axis=1,keepdims=True) for k in range(ndata)]
+            avg_target = np.concatenate(avg_target_list, axis=1)
+            print 'top_target, avg_target.shape = {}'.format(top_target.shape, avg_target.shape)
+            top_mpjpe = dutils.calc_mpjpe_from_residual(top_target - gt_target, 17) * 1200
+            avg_mpjpe = dutils.calc_mpjpe_from_residual(avg_target - gt_target, 17) * 1200
+            print 'avg mpjpe = {}, top mpjpe = {}'.format(avg_mpjpe.mean(), top_mpjpe.mean())
+            top_list =  top_mpjpe.flatten().tolist()
+            avg_list =  avg_mpjpe.flatten().tolist()
+        else:
+            for b in range(ndata):
+                # print 'Process idx = {}\t (raw index = {})'.format(b, indexes[b])
+                cur_image_feature = img_features[..., b].reshape((-1,1),order='F')
+                imgfeatures = np.tile(cur_image_feature, [1, N_candidate])
+                s,e = N_candidate * b, N_candidate * (b + 1)
+                candidate_features= batch_candidate_features[..., s:e]
+                candidate_targets = batch_candidate_targets[...,s:e]
+                eval_input_data = [solver.gpu_require(imgfeatures.T),
+                                   solver.gpu_require(candidate_features.T),
+                                   solver.gpu_require(np.zeros((N_candidate,1)))]
 
-            candidate_score= func(*eval_input_data)[0].flatten()
-            sidx = sorted(range(N_candidate), key= lambda k:candidate_score[k], reverse=True)
-            top_indexes = sidx[:topK]
-            avg_target = candidate_targets[..., top_indexes].mean(axis=1,keepdims=True)
-            top_target = candidate_targets[..., sidx[0]].reshape((-1,1),order='F')
-            cur_gt = gt_target[..., b].reshape((-1,1),order='F')
-            top_mpjpe = dutils.calc_mpjpe_from_residual(cur_gt - top_target, 17) * 1200
-            avg_mpjpe = dutils.calc_mpjpe_from_residual(cur_gt - avg_target, 17) * 1200
-            print 'avg mpjpe = {}, top mpjpe = {}'.format(avg_mpjpe, top_mpjpe)
-            top_list.append(top_mpjpe[0])
-            avg_list.append(avg_mpjpe[0])
+                candidate_score= func(*eval_input_data)[0].flatten()
+                sidx = sorted(range(N_candidate), key= lambda k:candidate_score[k], reverse=True)
+                top_indexes = sidx[:topK]
+                avg_target = candidate_targets[..., top_indexes].mean(axis=1,keepdims=True)
+                top_target = candidate_targets[..., sidx[0]].reshape((-1,1),order='F')
+                cur_gt = gt_target[..., b].reshape((-1,1),order='F')
+                top_mpjpe = dutils.calc_mpjpe_from_residual(cur_gt - top_target, 17) * 1200
+                avg_mpjpe = dutils.calc_mpjpe_from_residual(cur_gt - avg_target, 17) * 1200
+                print 'avg mpjpe = {}, top mpjpe = {}'.format(avg_mpjpe, top_mpjpe)
+                top_list.append(top_mpjpe[0])
+                avg_list.append(avg_mpjpe[0])
         print '    batch {} The avg mpjpe is {}'.format(bn, sum(avg_list)/ndata)
         print '    batch {} The top mpjpe is {}'.format(bn, sum(top_list)/ndata)
         all_avg_mpjpe += avg_list
@@ -589,8 +647,12 @@ class MMEvalPoseLoader(MMSolverLoader):
         self.op.eval_expr_defaults()
         solver_type = self.op.get_value('solver_type')
         if solver_type is None:
-            raise Exception('Please specify solver type')
-        print '-------Solver type {}---------'.format(solver_type)
+            load_file_path = self.op.get_value('load_file')
+            saved_model = Solver.get_saved_model(load_file_path)
+            solver_type = saved_model['solver_params']['solver_type']
+        print '''
+        solver_type is {}
+        '''.format(solver_type)
         inner_loader = self._inner_loader_dic[solver_type]()
         self.add_extra_op(inner_loader.op)
         return inner_loader.parse()
