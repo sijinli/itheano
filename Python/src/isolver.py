@@ -16,6 +16,11 @@ import idata
 import igraphparser
 from ilayer import Network # Maybe I will move to other files latter
 class SolverLoader(object):
+    _dp_required_fields = ['data_path', 'data_provider', 'train_range',
+                           'test_range', 'batch_size', 'force_shuffle']
+    _dp_common_required_fields = ['batch_size', 'data_path', 'force_shuffle']
+    _dp_dic=None
+    _solver_dic=None
     def __init__(self, op = None):
         if op is None:
             self.op = options.OptionsParser()
@@ -70,6 +75,13 @@ class SolverLoader(object):
             target[k] = source[k]
     def load_data_dic(self, dp_params):
         return None
+    def idisp(self, x):
+        if type(x) is list:
+            return 'list[len={}]'.format(len(x))
+        elif type(x) is np.ndarray:
+            return 'ndarray[shape={}]'.format(x.shape)
+        else:
+            return '{}'.format(x)
     def create_dp(self, op, saved_model = None):
         print '-------{}-------'.format('Create data provider')
         try:
@@ -77,19 +89,21 @@ class SolverLoader(object):
                 dp_params = saved_model['solver_params']['dp_params']
             else:
                 dp_params = None
-            required_fields = ['data_path', 'data_provider', 'train_range',
-                               'test_range', 'batch_size', 'force_shuffle']
+            required_fields = self._dp_required_fields
             optional_field = ['external_meta_path']
             default_dic = {'force_shuffle': False}
             d = dict()
             # print saved_model['solver_params'].keys()
             for e in required_fields:
-                if op.get_value(e) is not None:
+                if self.is_valid_value(op, e):
                     d[e] = op.get_value(e)
+                    print '     : use new set \t{}: {}'.format(e, self.idisp(d[e]))
                 elif dp_params and e in dp_params:
                     d[e] = dp_params[e]
+                    print '     : use saved \t{}: {}'.format(e, self.idisp(d[e]))
                 elif e in default_dic:
                     d[e] = default_dic[e]
+                    print '     : use default \t{}: {}'.format(e, self.idisp(d[e]))
                 else:
                     raise Exception('Field {} is missing'.format(e))
             for e in optional_field:
@@ -104,13 +118,14 @@ class SolverLoader(object):
                                  ['epoch', 'batchnum'])
             self.copy_dic_by_key(test_param, saved_model['model_state']['test'],
                                               ['epoch', 'batchnum'])
-        self.copy_dic_by_key(train_param, d, ['batch_size', 'data_path', 'force_shuffle'])
-        self.copy_dic_by_key(test_param, d, ['batch_size', 'data_path', 'force_shuffle'])
+        self.copy_dic_by_key(train_param, d, self._dp_common_required_fields)
+        self.copy_dic_by_key(test_param, d, self._dp_common_required_fields)
         dp_type = d['data_provider']
         data_dic = self.load_data_dic(d)
-        train_dp = idata.dp_dic[dp_type](data_dic=data_dic, train=True,
+        dp_dic = self._dp_dic if self._dp_dic else idata.dp_dic
+        train_dp = dp_dic[dp_type](data_dic=data_dic, train=True,
                                          data_range=d['train_range'], params=train_param)
-        test_dp = idata.dp_dic[dp_type](data_dic=data_dic, train=False, data_range=d['test_range'], params=test_param)
+        test_dp = dp_dic[dp_type](data_dic=data_dic, train=False, data_range=d['test_range'], params=test_param)
         return train_dp, test_dp, d
     def create_networks(self, op, saved_model):
         print '-------{}-------'.format('Create network')
@@ -152,10 +167,11 @@ class SolverLoader(object):
         solver_type = op.get_value('solver_type')
         if solver_type is None and 'solver_type' in saved_params:
             solver_type = saved_params['solver_type']
-        _cls = solver_dic[solver_type] 
+        sd = self._solver_dic if self._solver_dic else solver_dic
+        _cls = sd[solver_type] 
         required_list = _cls._required_field
         default_dic = dict(_cls._default_list)
-        # params in saved_params has least priority
+        # params in default_dic  has least priority
         for e in required_list:
             if (not e in solver_params) and self.is_valid_value(op, e):
                 solver_params[e] = op.get_value(e)
@@ -177,7 +193,14 @@ class SolverLoader(object):
         print 'save path = {}'.format(solver_params['save_path'])
         solver = _cls(net_list, train_dp, test_dp, solver_params)
         return solver
-
+class BasicBPLoader(SolverLoader):
+    def add_default_options(self, op):
+        SolverLoader.add_default_options(self, op)
+        op.add_option('opt-method', 'opt_method', options.StringOptionParser, 'the optimization methods [bp | ls]', default=None)
+        op.add_option('opt-params', 'opt_params', options.ListOptionParser(options.FloatOptionParser), 'the optimization parameters for opt method', default=None)
+    # def parse_solver_params(self, solver_params, op):
+    #     SolverLoader.parse_solver_params(self, solver_params, op)
+        
 class MMSolverLoader(SolverLoader):
     def add_default_options(self, op):
         SolverLoader.add_default_options(self, op)
@@ -243,6 +266,9 @@ class Solver(object):
     @classmethod
     def gpu_require(cls, X):
         return np.require(X, dtype=theano.config.floatX)
+    def set_train_mode(self, train=True):
+        for net in self.net_obj_list:
+            net.set_train_mode(train)
     def get_next_batch(self, train=True):
         dp = self.train_dp if train else self.test_dp
         return dp.get_next_batch()
@@ -254,7 +280,7 @@ class Solver(object):
                 self.solver_params[e]= solver_params[e]
             else:
                 self.solver_params[e] = default_dic[e]
-        for e in self._required_attributes:
+        for e in self._required_attributes: 
             setattr(self, e, solver_params[e])
         for e in ['train_error', 'test_error']:
             self.safe_set_attr(solver_params, e, [])
@@ -279,7 +305,7 @@ class Solver(object):
             os.remove(iu.fullfile(self.save_path, fn))
     @classmethod
     def write_features(cls, dp, net, save_folder, output_layer_names = None,
-                       test_one=False, inputs=None, dataidx=None):
+                       test_one=False, inputs=None, dataidx=None, ex_params=None):
         if inputs is None:
             inputs = net.inputs
         if dataidx is None:
@@ -292,6 +318,12 @@ class Solver(object):
         else:
             output_layers = net.get_layer_by_names(output_layer_names)
             outputs = sum([lay.outputs for lay in output_layers], [])
+        if ex_params is None:
+            start_batch_idx = 0
+            start_epoch = 0
+        else:
+            start_batch_idx = ex_params['start_batch_idx']
+            start_epoch = 0
         func = theano.function(inputs=inputs,outputs=outputs,
                                on_unused_input='ignore')
         iu.ensure_dir(save_folder)
@@ -299,8 +331,11 @@ class Solver(object):
         saved['info'] = dict()
         saved['info']['feature_names'] = [e.name for e in outputs]
         net.set_train_mode(False)
-        dp.reset()
-        for b in range(num_batch):
+        dp.reset(start_epoch, start_batch_idx)
+        if hasattr(dp, 'use_buffer'):
+            print 
+            dp.use_buffer = False
+        for b in range(start_batch_idx, num_batch):
             epoch, batchnum, alldata = dp.get_next_batch()
             input_data = [Solver.gpu_require(alldata[k].T) for k in dataidx]
             res = func(*input_data)
@@ -457,6 +492,25 @@ class MMSolver(Solver):
             return lambda X: dutils.calc_jpe_from_residual(X, num_joints=17)
         elif func_name == 'exp_mpjpe':
             return lambda X: np.exp(dutils.calc_mpjpe_from_residual(X, num_joints=17)) - 1
+        elif func_name == 'abssum':
+            return lambda X: np.abs(X).sum(axis=0, keepdims=True)
+        elif func_name == 'abssum_10_1':
+            def proc_abssum_10_1(gt, pred):
+                """
+                diff = gt - pred
+                """
+                diff = gt - pred
+                return np.abs(diff).sum(axis=0, keepdims=True) + np.asarray((diff > 0)*9,dtype=gt.dtype).sum(axis=0, keepdims=True)
+            return proc_abssum_10_1
+        elif func_name == 'abssum_10_1_ext':
+            def proc_abssum_10_1_ext(gt, pred):
+                """
+                """
+                diff = gt - pred
+                absdiff = np.abs(diff)
+                absdiff10 = 10 * absdiff
+                return np.where(diff > 0, absdiff10, absdiff).sum(axis=0,keepdims=True)
+            return proc_abssum_10_1_ext
         else:
             raise Exception('Unsupported margin type {}'.format(func_name))
     def parse_params(self, solver_params):
@@ -492,7 +546,8 @@ class MMSolver(Solver):
 class MMLSSolver(MMSolver):
     """
     The solver for Maxmimum Margin && linesearch
-    train_forward_func: 
+    train_forward_func:
+    NOTE: Does not support additional_update
     """
     _solver_type='mmls'
     def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
@@ -866,9 +921,12 @@ class BasicBPSolver(Solver):
           update: use
                    weights_inc(t) = weights_inc(t-1) * mom - eps * g_weights(t) 
                    weights(t)     =  weights(t-1) + weights_inc(t)
-                                  =  weights(t-1) + weights_inc(t-1) * mom - eps * g_weights(t) 
+                                  =  weights(t-1) + weights_inc(t-1) * mom - eps * g_weights(t)
+          rmsprop:  
     DONE : Add W_inc_list, b_inc into layer with weigths Need to check
     """
+    _default_list = [('opt_method', 'bp'), ('opt_params', None)]
+    _required_field = ['opt_method', 'opt_params'] + Solver._required_field
     _solver_type='basicbp'
     def __init__(self, net_list, train_dp, test_dp, solver_params=None):
         Solver.__init__(self, net_list, train_dp, test_dp, solver_params)
@@ -877,19 +935,51 @@ class BasicBPSolver(Solver):
         # self.params_all = self.net.params + self.net.params_inc
         self.lr = theano.shared(np.cast[theano.config.floatX](1.0))
         self.grads = tensor.grad(self.net.costs[0], self.net.params)
-        p_inc_new = [p_inc * mom - (self.lr * eps) * g for p_inc, mom, eps, g in
-                     zip(self.net.params_inc, self.net.params_mom, self.net.params_eps,
-                         self.grads)]
+        self.opt_method = self.solver_params['opt_method']
+        ## I should pack this part into a single module
+        ex_updates = []
+        if self.opt_method == 'bp':
+            p_inc_new = [p_inc * mom - (self.lr * eps) * g for p_inc, mom, eps, g in
+                         zip(self.net.params_inc, self.net.params_mom, self.net.params_eps,
+                             self.grads)]
+        elif self.opt_method == 'rmsprop':
+            opt_params = solver_params['opt_params']
+            if opt_params is None:
+                self.solver_params['opt_params'] = opt_params = [0.9, 1e-6]
+            else:
+                assert(len(opt_params) == 2)
+                self.solver_params['opt_params'] = opt_params
+            rho = theano.shared(np.cast[theano.config.floatX](opt_params[0]))
+            eps = theano.shared(np.cast[theano.config.floatX](opt_params[1]))
+            g_acc = [theano.shared(np.zeros(x.get_value().shape,dtype=theano.config.floatX)) for x in self.net.params]
+            g_acc_new = [rho * a + (1-rho) * (g**2) for a,g in zip(g_acc, self.grads)]
+            p_inc_new = [-(self.lr * g)/tensor.sqrt(g_a_n + eps) for g, g_a_n in zip(self.grads, g_acc_new)]
+            ex_updates = zip(g_acc, g_acc_new)
+        else:
+            assert(self.opt_method == 'ls')
+            p_inc_new = [ - (self.lr * eps) * g for  eps, g in
+                         zip(self.net.params_eps, self.grads)]
         param_updates = [ (p, p + inc) for p, inc in zip(self.net.params, p_inc_new)]
         param_inc_updates = [(p_inc, inc) for p_inc, inc in zip(self.net.params_inc, p_inc_new)]
+
+        train_updates = param_updates + param_inc_updates + ex_updates
+        if self.net.additional_updates:
+            train_updates += self.net.additional_updates
+        ##
+        
         self.monitor_list = self.net.cost_list + [abs(p).mean() for p in self.net.params] + [abs(g).mean() for g in p_inc_new]
         self.monitor_idx = np.cumsum([0, len(self.net.cost_list),
                             len(self.net.params), len(p_inc_new)])
         self.monitor_name = ['cost_list', 'mean_weights', 'mean_inc']
         self.train_func = theano.function(inputs=self.net.inputs,
                                           outputs=self.monitor_list,
-                                          updates= param_updates + param_inc_updates,
+                                          updates= train_updates,
         )
+        self.train_cost_func = theano.function(inputs=self.net.inputs,
+                                               outputs=self.net.costs,
+        )
+        self.train_grad_func = theano.function(inputs=self.net.inputs,
+                                               outputs=self.grads)
         self.test_func = theano.function(inputs=self.net.inputs,
                                          outputs= self.net.cost_list)
         self.grad_check_func = theano.function(inputs=self.net.inputs,
@@ -943,18 +1033,52 @@ class BasicBPSolver(Solver):
             iu.print_common_statistics(e_res)
     def extract_cost(self, info):
         return info[:self.monitor_idx[1]]
+    def get_search_steps(self):
+        num_step = int(7)
+        return np.power(10.0,range(-num_step,3))
+    def do_opt(self, input_data):
+        if self.opt_method in ['bp', 'rmsprop']:
+            self.net.set_train_mode(train=True)
+            self.lr.set_value(np.cast[theano.config.floatX](1.0))
+            info = self.train_func(*input_data)
+        else:
+            steps = self.get_search_steps()
+            params_eps = [e.get_value(borrow=False) for e in self.net.params_eps]
+            params = self.net.params
+            params_host = [v.get_value(borrow=False) for v in params]
+            self.net.set_train_mode(train=False)
+            cur_gradients = self.train_grad_func(*input_data)
+            cost_list = []
+            for s in steps:
+                ss = s
+                inner_params_host = [p - (ss * eps) * g for p,g, eps in zip(params_host,
+                                                                                cur_gradients,
+                                                                                params_eps)]
+                self.set_params(params, inner_params_host)
+                cur_cost = self.train_cost_func(*input_data)
+                cost_list.append(cur_cost[0])
+            min_idx = np.argmin(cost_list)
+            best_step = steps[min_idx]
+            print '    Cost = {} \t [max :{}]'.format(cost_list[min_idx], max(cost_list))
+            print '    best step = {}'.format(best_step)
+            self.net.set_train_mode(train=True)
+            self.lr.set_value(np.cast[theano.config.floatX](best_step))
+            info = self.train_func(*input_data)
+        return info
     def train(self):
         cur_data = self.get_next_batch(train=True)
         self.epoch, self.batchnum=cur_data[0], cur_data[1]
         while True:
-            self.net.set_train_mode(train=True)
+
             self.print_iteration()
             compute_time_py = time()
             input_data = self.prepare_data(cur_data[2])
-            # Althouth there is no need to change every time
-            self.lr.set_value(np.cast[theano.config.floatX](1.0))
+            # self.net.set_train_mode(train=True)
+            # # Althouth there is no need to change every time
+            # self.lr.set_value(np.cast[theano.config.floatX](1.0))
+            # info = self.train_func(*input_data)
 
-            info = self.train_func(*input_data)
+            info = self.do_opt(input_data)
             # self.DEBUG_show_layer_statistcs(input_data)
             
             costs = self.extract_cost(info)
@@ -1012,8 +1136,8 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
     calc_img_feature_func <------- feature_net
     train_forward_func  < -------  trainnet    use to get the outputs of maxmargin cost layer
     """
-    _default_list = [('opt_method', 'bp')] + MMSolver._default_list
-    _required_field = ['opt_method'] + MMSolver._required_field
+    _default_list = [('opt_method', 'bp'), ('opt_params', None)] + MMSolver._default_list
+    _required_field = ['opt_method', 'opt_params'] + MMSolver._required_field
     _solver_type='imgmm'
     def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
         Solver.__init__(self, net_obj_list, train_dp, test_dp, solver_params)
@@ -1034,6 +1158,10 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         param_updates = [ (p, p + inc) for p, inc in zip(self.train_net.params, p_inc_new)]
         param_inc_updates = [(p_inc, inc) for p_inc, inc in zip(self.train_net.params_inc,
                                                                 p_inc_new)]
+        if self.train_net.additional_updates:
+            ex_updates = self.train_net.additional_updates
+        else:
+            ex_updates = []
         self.monitor_list = self.train_net.cost_list + \
                             [abs(p).mean() for p in self.train_net.params] +\
                             [abs(g).mean() for g in p_inc_new]
@@ -1042,8 +1170,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         self.monitor_name = ['cost_list', 'mean_weights', 'mean_inc']
         self.train_func = theano.function(inputs=self.train_net.inputs,
                                           outputs=self.monitor_list,
-                                          updates=param_updates + param_inc_updates,
-        )
+                                          updates=param_updates + param_inc_updates + ex_updates)
         self.train_cost_func = theano.function(inputs=self.train_net.inputs,
                                                outputs=self.train_net.costs)
         self.train_grad_func = theano.function(inputs=self.train_net.inputs,
@@ -1066,9 +1193,6 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         self.stat['sample_candidate_counts'] = np.zeros((n_train))  #
         self.stat['most_violated_counts'] = np.zeros((n_train))
         self.cur_batch_indexes = None
-    def set_train_mode(self, train=True):
-        for net in self.net_obj_list:
-            net.set_train_mode(train)
     def calc_image_features(self, input_data):
         # use test mode for feature extraction
         self.set_train_mode(train=False)
@@ -1189,7 +1313,7 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         num_step = int(7)
         return np.power(10.0,range(-num_step,3))
     def do_opt(self, mv_input_data):
-        if self.opt_method == 'bp':
+        if self.opt_method in ['bp', 'rmsprop']:
             self.set_train_mode(train=True)
             self.lr.set_value(np.cast[theano.config.floatX](1.0))
             info_list = [self.train_func(*mv_input_data) for k in range(self.opt_num)]
@@ -1255,9 +1379,13 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                     mini_mv_input_data = [self.gpu_require(e.T) for e in mvdata]
                     if K_top_update == 1:
                         mini_mv_input_data[0] = input_data[0]
+                        for e in input_data[2:]:
+                            mini_mv_input_data.append(e)
                     else:
                         rep_indexes = np.tile(np.array(range(input_data[0].shape[0])).reshape((1, input_data[0].shape[0])), [K_top_update, 1]).flatten(order='F')
                         mini_mv_input_data[0] = input_data[0][rep_indexes, ...]
+                        for e in input_data[2:]:
+                            mini_mv_input_data.append(e[rep_indexes,...])
                     res, act_ind = self.analyze_num_sv_ext(mini_mv_input_data)
                     nsv = np.sum(act_ind.flatten())
                     print 'support vector {} of {}:\t{}%\t mmcost={}'.format(nsv, act_ind.size,
@@ -1288,9 +1416,13 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                 mv_input_data = [self.gpu_require(e.T) for e in mvdata]
                 if K_top_update == 1:
                     mv_input_data[0] = input_data[0]
+                    for e in input_data[2:]:
+                        mv_input_data.append(e)
                 else:
                     rep_indexes = self.get_repindexes(input_data[0].shape[0], K_top_update)
                     mv_input_data[0] = input_data[0][rep_indexes, ...]
+                    for e in input_data[2:]:
+                        mv_input_data.append(e[rep_indexes,...])
             compute_time_py = time()
 
             self.set_train_mode(train=True)
@@ -1311,14 +1443,17 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
                 test_costs = self.get_test_error()
                 self.test_error.append(self.pack_cost(test_costs, self.train_net))
                 self.print_cost(train=False)
+                num_updates = 0
             cur_batch_done = self.get_num_batches_done(True)
             if (cur_batch_done // self.testing_freq) * self.testing_freq > pre_batch_done:
                 self.save_model()
                 print 'Test && save:\t{} seconds '.format(time()- compute_time_py)
-            pre_batch_done = cur_batch_done
             self.epoch, self.batchnum = self.train_dp.epoch, self.train_dp.batchnum
             if self.epoch == self.num_epoch:
+                if (cur_batch_done // self.testing_freq) * self.testing_freq == pre_batch_done:
+                    self.save_model()
                 break
+            pre_batch_done = cur_batch_done
             compute_time_py = time()
             cur_data = self.get_next_batch(train=True)
             self.cur_batch_indexes = self.train_dp.get_batch_indexes()
@@ -1331,13 +1466,18 @@ class ImageMMSolver(BasicBPSolver, MMSolver):
         fdata = [imgfeatures.T, input_data[1].T]            
         mvdata = self.find_most_violated(fdata, train=False)
         mv_input_data = [self.gpu_require(e.T) for e in mvdata]
-        K_update = self.solver_params['K_top_update'] 
+        K_update = self.solver_params['K_top_update']
+        K_update = 1
         if K_update == 1:
             mv_input_data[0] = input_data[0]
+            for e in input_data[2:]:
+                mv_input_data.append(e)
         else:
             ntest = input_data[0].shape[0]
             rep_indexes = np.tile(np.array(range(ntest)).reshape((1,ntest)), [K_update, 1]).flatten(order='F')
             mv_input_data[0] = input_data[0][rep_indexes,...]
+            for e in input_data[2:]:
+                mv_input_data.append(e[rep_indexes,...])
         costs = self.test_func(*mv_input_data)
         return costs
     def save_model(self):
@@ -1369,6 +1509,28 @@ class ImageDotProdMMSolver(ImageMMSolver):
     eval_func <---------  target_trans_net (imgfeature,joints,margin) -> score
     """
     _solver_type='imgdpmm'
+    @classmethod
+    def get_updated_parameter(cls, net, grads, lr, opt_method, opt_params=None):
+        ex_updates = []
+        if opt_method == 'bp':
+            p_inc_new = [p_inc * mom - (lr * eps) * g for p_inc, mom, eps, g in
+                         zip(net.params_inc, net.params_mom,
+                             net.params_eps, grads)]
+        elif opt_method == 'rmsprop':
+            rho = theano.shared(np.cast[theano.config.floatX](opt_params[0]))
+            eps = theano.shared(np.cast[theano.config.floatX](opt_params[1]))
+            g_acc = [theano.shared(np.zeros(x.get_value().shape,dtype=theano.config.floatX)) for x in net.params]
+            g_acc_new = [rho * a + (1-rho) * (g**2) for a,g in zip(g_acc, grads)]
+            p_inc_new = [-(lr * g)/tensor.sqrt(g_a_n + eps) for g, g_a_n in zip(grads, g_acc_new)]
+            ex_updates = zip(g_acc, g_acc_new)
+        else:
+            assert(opt_method == 'ls')
+            p_inc_new = [ - (lr * eps) * g for  eps, g in
+                         zip(net.params_eps, grads)]
+        if net.additional_updates:
+            ex_updates = ex_updates + net.additional_updates
+        return p_inc_new, ex_updates
+        
     def __init__(self, net_obj_list, train_dp, test_dp, solver_params = None):
         Solver.__init__(self, net_obj_list, train_dp, test_dp, solver_params)
         self.train_net, self.feature_net, self.target_trans_net = net_obj_list
@@ -1376,27 +1538,30 @@ class ImageDotProdMMSolver(ImageMMSolver):
         self.lr = theano.shared(np.cast[theano.config.floatX](1.0))
         self.grads = tensor.grad(self.train_net.costs[0], self.train_net.params)
         self.opt_method = self.solver_params['opt_method']
-        if self.opt_method == 'bp':
-            p_inc_new = [p_inc * mom - (self.lr * eps) * g for p_inc, mom, eps, g in
-                         zip(self.train_net.params_inc, self.train_net.params_mom,
-                             self.train_net.params_eps, self.grads)]
-        else:
-            assert(self.opt_method == 'ls')
-            p_inc_new = [ - (self.lr * eps) * g for  eps, g in
-                         zip(self.train_net.params_eps, self.grads)]
+        # if self.opt_method == 'bp':
+        #     p_inc_new = [p_inc * mom - (self.lr * eps) * g for p_inc, mom, eps, g in
+        #                  zip(self.train_net.params_inc, self.train_net.params_mom,
+        #                      self.train_net.params_eps, self.grads)]
+        # else:
+        #     assert(self.opt_method == 'ls')
+        #     p_inc_new = [ - (self.lr * eps) * g for  eps, g in
+        #                  zip(self.train_net.params_eps, self.grads)]
+        p_inc_new, ex_updates = self.get_updated_parameter(self.train_net, self.grads, self.lr,
+                                               self.opt_method, solver_params['opt_params'])
         param_updates = [ (p, p + inc) for p, inc in zip(self.train_net.params, p_inc_new)]
         param_inc_updates = [(p_inc, inc) for p_inc, inc in zip(self.train_net.params_inc,
                                                                 p_inc_new)]
+        
         self.monitor_list = self.train_net.cost_list + \
                             [abs(p).mean() for p in self.train_net.params] +\
                             [abs(g).mean() for g in p_inc_new]
         self.monitor_idx = np.cumsum([0, len(self.train_net.cost_list),
                             len(self.train_net.params), len(p_inc_new)])
         self.monitor_name = ['cost_list', 'mean_weights', 'mean_inc']
+        all_updates = param_updates + param_inc_updates + ex_updates
         self.train_func = theano.function(inputs=self.train_net.inputs,
                                           outputs=self.monitor_list,
-                                          updates=param_updates + param_inc_updates,
-        )
+                                          updates=all_updates)
         self.train_cost_func = theano.function(inputs=self.train_net.inputs,
                                                outputs=self.train_net.costs)
         self.train_grad_func = theano.function(inputs=self.train_net.inputs,
@@ -1416,23 +1581,23 @@ class ImageDotProdMMSolver(ImageMMSolver):
         self.make_eval_func()
         flayer_name = 'net2_mmcost'
         self.train_forward_func = theano.function(inputs=self.train_net.inputs,
-                                                  outputs=self.train_net.layers[flayer_name][2].outputs)
+                                                  outputs=self.train_net.layers[flayer_name][2].outputs, on_unused_input='ignore')
         self.margin_dim = self.train_net.layers[flayer_name][2].param_dic['margin_dim']
         assert(self.margin_dim == 1)
         self.data_idx = self.train_net.data_idx
+        self.prepare_stat()
+        self.cur_batch_indexes = None
+    def prepare_stat(self):
         self.stat = dict()
         n_train = len(self.train_dp.data_range)
         self.stat['sample_candidate_counts'] = np.zeros((n_train))  #
         self.stat['most_violated_counts'] = np.zeros((n_train))
-        self.cur_batch_indexes = None
     def make_eval_func(self):
         s_img_feature = tensor.fmatrix('s_img_feature_solver')
         s_margin = tensor.fmatrix('s_margin_solver')
         inputs = [s_img_feature, self.target_trans_net.inputs[0], s_margin]
         outputs = [(self.target_trans_net.outputs[0] * s_img_feature).sum(axis=1,keepdims=True) + s_margin]
         self.eval_func = theano.function(inputs=inputs, outputs=outputs)
-        
-        
     def create_candidate_indexes(self, ndata, dp, train):
         data_range = dp.data_range
         n_train = len(data_range)
@@ -1490,7 +1655,7 @@ class ImageDotProdMMSolver(ImageMMSolver):
         all_candidate_targets = fl[0][..., all_candidate_indexes]
         if feat_E is not None:
             dim_X = all_candidate_targets.shape[0]
-            all_candidate_targets = all_candidate_targets + np.dot(feat_E, np.random.randn(dimX, K_tot))
+            all_candidate_targets = all_candidate_targets + np.dot(feat_E, np.random.randn(dim_X, K_tot))
         imgfeatures, gt_target = fdata[0], fdata[1]
         score_collect_list = []
         all_targets_list = []
@@ -1498,29 +1663,19 @@ class ImageDotProdMMSolver(ImageMMSolver):
         itm.restart()
         num_mini_batch = (K_tot - 1)  // max_num + 1 
         print 'There are {} mini_batches'.format(num_mini_batch)
-        # itm.addtag('Begin')
-        for mb in range(num_mini_batch):
-            # divide the candidate set instead of the samples
-            # Because bathc size is always smaller
-            start, end = mb * max_num, min(K_tot, (mb + 1) * max_num)
-            candidate_targets = all_candidate_targets[..., start:end].reshape((-1,end-start),order='F')
-            
-            candidate_features_T = self.calc_target_feature_func(self.gpu_require(candidate_targets.T))[0]
-            
-            # raw_score is n_candidate x ndata
-            raw_score = self.calc_dot(candidate_features_T, imgfeatures)
-            # itm.addtag('after dot ---{}'.format(mb))
-            score_collect_list.append(raw_score)
-        # itm.addtag('find mvc')
+        itm.tic('score calculation')
+        def inner_calc_score(X):
+            return self.calc_dot(self.calc_target_feature_func(self.gpu_require(X))[0], imgfeatures)
+        score_collect_list = [inner_calc_score(all_candidate_targets[..., range(mb * max_num,min(K_tot, (mb + 1) * max_num))].T) for mb in range(num_mini_batch)]
+        itm.toc()
         raw_score_mat = np.concatenate(score_collect_list, axis=0)
         if not use_zero_margin:
-            margin_mat = np.concatenate([calc_margin(all_candidate_targets - gt_target[...,k].reshape((-1,1),order='F') ) for k in range(ndata)],axis=0).T
+            margin_mat = np.concatenate([calc_margin(all_candidate_targets - gt_target[...,[k]] ) for k in range(ndata)],axis=0).T
             score_mat = raw_score_mat + margin_mat
         else:
             score_mat= raw_score_mat
         # itm.addtag('Finished')
         # itm.print_all()
-        # print 'score_mat shape is {}'.format(score_mat.shape)
         m_indexes = np.argpartition(-score_mat, K_update, axis=0)[:K_update,:].flatten(order='F')
         # print 'm_indexes.shape  = {}\t K_update x ndata = {}'.format(m_indexes.shape, K_update * ndata)
         selected_indexes = all_candidate_indexes[m_indexes]
@@ -1533,7 +1688,7 @@ class ImageDotProdMMSolver(ImageMMSolver):
             imgfeats = np.tile(fdata[0], [K_update,1]).reshape((-1, K_update*ndata),order='F')
         else:
             imgfeats,gt = fdata[0],fdata[1]
-        mv_margin = self.margin_func(most_violated_targets - gt_target)
+        mv_margin = self.margin_func(most_violated_targets - gt) ## 
         gt_margin = np.zeros((self.margin_dim, K_update* ndata), dtype=np.float32)
         alldata = [imgfeats, gt, most_violated_targets, gt_margin, mv_margin]
         all_candidate_indexes_ext = np.tile(all_candidate_indexes.reshape((-1,1),order='F'), [1, ndata]).flatten(order='F')
@@ -1549,7 +1704,7 @@ class ImageDotProdMMSolver(ImageMMSolver):
         net_dic['feature_net']['layers'] = net_dic['train_net']['layers']
         model_state = {'train': self.train_dp.get_state_dic(),
                        'test':self.test_dp.get_state_dic(),
-                       'state':self.stat}
+                       'stat':self.stat}
         solver_params = self.solver_params
         solver_params['train_error'] = self.train_error
         solver_params['test_error'] = self.test_error

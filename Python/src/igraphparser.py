@@ -56,16 +56,18 @@ class GraphParser(object):
         dic['weights_inc'] = [layers[name][2].W_inc_list[idx] for name, idx in l]
     def get_shared_biases(self, b_s, layers, dic):
         l = [self.parse_name_idx(s) for s in b_s]
-        assert(len(l) == 1)
-        assert(l[0][1] == 0)
-        dic['biases'] = layers[l[0][0]][2].b
-        dic['biases_inc'] = layers[l[0][0]][2].b_inc
+        # assert(len(l) == 1)
+        # assert(l[0][1] == 0)
+        dic['biases'] = [layers[name][2].b_list[idx] for name, idx in l]
+        dic['biases_inc'] = [layers[name][2].b_inc_list[idx] for name, idx in l]
     def add_network_config(self, name, mcp):
         # Move to Network Parser latter
         net_config = {'layer_def_path':self.file_path}
-        default_config = {'dropout_layer_names': None, 'data_idx':None}
+        default_config = {'dropout_layer_names': None, 'data_idx':None,
+                          'dual_mode_layer_names':None, 'additional_update_layer':None}
         for e in ['cost_layer_names', 'data_layer_names', 'output_layer_names',
-                  'layer_with_weights', 'dropout_layer_names', 'data_idx']:
+                  'layer_with_weights', 'dropout_layer_names', 'data_idx',
+                  'dual_mode_layer_names', 'additional_update_layer_names']:
             if mcp.has_option(name, e):
                 if e in ['data_idx']:
                     net_config[e] = mcp.safe_get_int_list(name, e)
@@ -86,13 +88,13 @@ class GraphParser(object):
             print('Layer: {} :input layer {} \n \t output layers {}'.format(l[2].param_dic['name'], l[0], l[1]))
             print ('    input_var {}'.format(l[2].inputs))
     def parse(self,mcp):
-        self.layers = dict()
-        self.network_config = dict()
-        self.symbolic_var_dic = dict()
+        self.layers = OrderedDict()
+        self.network_config = OrderedDict()
+        self.symbolic_var_dic = OrderedDict()
         for name in mcp.sections(): # Ensure the iterator is ordered
             mcp.check_options(name, ['type'])
             layer_type= mcp.safe_get(name, 'type')
-            advanced_params = dict()
+            advanced_params = OrderedDict()
             if layer_type == 'network':
                 self.add_network_config(name, mcp)
                 continue
@@ -112,6 +114,8 @@ class GraphParser(object):
                 if mcp.has_option(name, 'biasSource'):
                     b_s = mcp.safe_get_list(name, 'biasSource')
                     self.get_shared_biases(b_s, self.layers,advanced_params)
+            if name in self.layers:
+                raise Exception('Layer [{}] has been defined'.format(name))
             lp = layer_parser_dic[layer_type](name, input_var, mcp, input_dims, advanced_params)
             self.layers[name] = [input_names, [], lp.parse()]
             for lname in input_names:

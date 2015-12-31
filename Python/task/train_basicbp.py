@@ -21,7 +21,7 @@ import sys
 def main():
     ## TODO NEED TO CHANGE.
     ## SolverLoader should split the process into several steps
-    solver_loader = SolverLoader()
+    solver_loader = BasicBPLoader()
     solver = solver_loader.parse()
     # print len(solver.train_error)
     solver.train()

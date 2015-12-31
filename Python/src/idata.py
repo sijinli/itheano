@@ -3,10 +3,19 @@ import sys
 import iread.myio as mio
 import iutils as iu
 class DataProvider(object):
+    """
+    FAQ:
+    data_range will be passed from outside
+    shuffled_data_range is used for feeding data into gpu
+    In some dataprovider len(shuffled_data_range) != data_range because
+    shuffled_data_range only feed "valid" data
+    image_range is the term used in convnet data provider
+    """
+    _required_attributes = ['batch_size']
     def __init__(self, data_dic, train, data_range, params):
         self.data_dic = data_dic
         self.param_dic = dict()
-        self.required_attributes = ['batch_size']
+        self.required_attributes = DataProvider._required_attributes
         self.required_field = []
         self.train = train
         self.data_range = np.array(data_range)
@@ -14,8 +23,9 @@ class DataProvider(object):
         self.pre_batchnum = None
         self.batch_data = None
         self.batch_indexes = None
-    def reset(self):
-        self.batchnum = self.epoch = 0
+    def reset(self, epoch=0, batchnum=0):
+        self.batchnum = batchnum
+        self.epoch = epoch
     def safe_add_params(self, key_name, source_dic, default_value=None):
         if key_name in source_dic:
             self.param_dic[key_name] = source_dic[key_name]
@@ -50,8 +60,16 @@ class DataProvider(object):
             batchnum = 0
             epoch = epoch + 1
         return epoch, batchnum
+    def get_next_batch(self):
+        data = self.get_batch(self.batchnum)
+        epoch, batchnum = self.epoch, self.batchnum
+        self.pre_batchnum = batchnum
+        self.advance_batch()
+        return epoch, batchnum, data
     def get_num_batches_done(self, epoch, batchnum):
         return epoch * self.num_batch + batchnum
+class FakeDataProvider(DataProvider):
+    pass
 class MemoryDataProvider(DataProvider):
     def __init__(self, data_dic, train, data_range, params):
         DataProvider.__init__(self, data_dic, train, data_range, params)
@@ -166,9 +184,11 @@ class CroppedImageDataWarper(DHMLPEDataWarper):
     def parse_params(self, params):
         DHMLPEDataWarper.parse_params(self, params)
         self.safe_add_params('with_buffer', params, True)
-    def reset(self):
-        DHMLPEDataWarper.reset(self)
-        self.inner_dp.reset()
+    def reset(self, epoch=0, batch_idx=0):
+        DHMLPEDataWarper.reset(self, epoch, batch_idx)
+        self.inner_dp.batch_idx = 0
+        batch_offset = self.inner_dp.get_next_batch_idx()
+        self.inner_dp.reset(epoch, batch_idx * batch_offset)
     def get_batch_indexes(self, batchnum=None):
         return self.cur_batch_indexes
     def get_plottable_data(self, imagedata):
@@ -192,6 +212,7 @@ class CroppedDHMLPEJointDataWarper(CroppedImageDataWarper):
     def __init__(self, data_dic, train, data_range, params):
         CroppedImageDataWarper.__init__(self, data_dic,train, data_range, params)
         self.max_depth = self.inner_dp.max_depth
+        self.use_buffer = True
     def create_inner_dp(self, data_path, data_range, epoch, init_batchnum, dp_params, test):
         return self.dhmlpe_convdata.CroppedDHMLPEJointDataProvider(data_path,
                                                                    data_range,
@@ -201,13 +222,14 @@ class CroppedDHMLPEJointDataWarper(CroppedImageDataWarper):
                                                                    test=True)
     def get_next_batch(self):
         epoch, batchnum = self.epoch, self.batchnum
-        if batchnum in self.data_buffer:
+        if batchnum in self.data_buffer and self.use_buffer:
             alldata = self.data_buffer[batchnum]
             self.cur_batch_indexes = self.data_indexes[self.batchnum]
         else:
             dummy1, dummy2, alldata = self.inner_dp.get_next_batch()
-            self.data_buffer[self.batchnum] = alldata
-            self.data_indexes[self.batchnum] = self.inner_dp.data_dic['cur_batch_indexes']
+            if self.use_buffer:
+                self.data_buffer[self.batchnum] = alldata
+                self.data_indexes[self.batchnum] = self.inner_dp.data_dic['cur_batch_indexes']
             self.cur_batch_indexes = self.inner_dp.data_dic['cur_batch_indexes']
         offset_r, offset_c, cropped_images = self.crop_image(alldata[0])
         self.cur_offset_r = offset_r
@@ -220,10 +242,44 @@ class CroppedDHMLPEJointDataWarper(CroppedImageDataWarper):
             raise Exception('It is too large ! You will not want to load it into memory now')
         else: 
             return self.inner_dp.get_all_data_at(idx)
+class CroppedDHMLPEJointCompactDataWarper(CroppedDHMLPEJointDataWarper):
+    def get_next_batch(self):
+        epoch, batchnum, alldata = CroppedDHMLPEJointDataWarper.get_next_batch(self)
+        return epoch, batchnum, alldata[:2]
+        
+class CroppedDHMLPEJointRandDataWarper(CroppedDHMLPEJointDataWarper):
+    def get_next_batch(self):
+        epoch, batchnum, alldata = CroppedDHMLPEJointDataWarper.get_next_batch(self)
+        # cur_batch_indexes = self.cur_batch_indexes
+        dp = self.inner_dp
+        ndata = alldata[0].shape[-1]
+        indexes = np.random.choice(dp.shuffled_image_range, ndata)
+        joints3d = dp.batch_meta[dp.feature_name_3d][..., indexes].reshape((-1,ndata),order='F')
+        joints3d = joints3d / dp.max_depth
+        return epoch, batchnum, alldata[:2] + [joints3d]
+class CroppedDHMLPEJointOccDataWarper(CroppedDHMLPEJointDataWarper):
+    def create_inner_dp(self, data_path, data_range, epoch, init_batchnum, dp_params, test):
+        return self.dhmlpe_convdata.CroppedDHMLPEJointOccDataProvider(data_path,
+                                                                      data_range,
+                                                                      epoch,
+                                                                      init_batchnum,
+                                                                      dp_params,
+                                                                      test=True)
+class CroppedDHMLPEJointSlowDataWarper(CroppedDHMLPEJointDataWarper):
+    def __init__(self, data_dic, train, data_range, params):
+        CroppedDHMLPEJointDataWarper.__init__(self, data_dic, train, data_range, params)
+        self.use_buffer = False
 
 class CroppedImageClassificationDataWarper(CroppedImageDataWarper):
     """
     Provide [img, label, labelind]
+    Minimum Requirements for batch_meta
+    batch_meta:
+          mean_image
+          rgb_eigenvalue
+          rgb_eigenvector
+          image_adjust_dim
+          image_sample_dim
     """
     def __init__(self, data_dic, train, data_range, params):
         CroppedImageDataWarper.__init__(self, data_dic, train,data_range, params)
@@ -264,5 +320,110 @@ class CroppedImageClassificationDataWarper(CroppedImageDataWarper):
         self.advance_batch()
         input_images = self.imgdim_shuffle(cropped_images,self.input_image_dim)
         return epoch, batchnum, [input_images] + alldata[1:]
-dp_dic = {'mem': MemoryDataProvider, 'croppedjt':CroppedDHMLPEJointDataWarper,
-          'croppedimgcls':CroppedImageClassificationDataWarper}
+
+class CroppedImageMLCDataWarper(CroppedImageDataWarper):
+    def __init__(self, data_dic, train, data_range, params):
+        CroppedImageDataWarper.__init__(self, data_dic,train, data_range, params)
+        self.labels = self.inner_dp.batch_meta['labels']
+        # print 'Labels.shape = {}'.format(self.labels.shape)
+        # print 'images path len = {}'.format(len(self.inner_dp.batch_meta['images_path']))
+        self.use_buffer = True
+    def get_next_batch(self):
+        epoch, batchnum = self.epoch, self.batchnum
+        if batchnum in self.data_buffer and self.use_buffer:
+            alldata = self.data_buffer[batchnum]
+            self.cur_batch_indexes = self.data_indexes[self.batchnum]
+        else:
+            dummy1, dummy2, alldata = self.inner_dp.get_next_batch()
+            # print 'Get alldata[0].shape = {}'.format(alldata[0].shape)
+            cur_indexes = self.inner_dp.data_dic['cur_batch_indexes']
+            labels = self.labels[..., cur_indexes]
+            alldata.append(labels)
+            if self.use_buffer:
+                self.data_indexes[self.batchnum] = cur_indexes
+                self.data_buffer[self.batchnum] = alldata
+            self.cur_batch_indexes = cur_indexes
+        offset_r, offset_c, cropped_images = self.crop_image(alldata[0])
+        self.cur_offset_r = offset_r
+        self.cur_offset_c = offset_c
+        self.advance_batch()
+        input_images = self.imgdim_shuffle(cropped_images,self.input_image_dim)
+        return epoch, batchnum, [input_images] + alldata[1:]
+    def get_all_data_at(self, idx=0):
+        if idx == 0:
+            raise Exception('It is too large ! You will not want to load it into memory now')
+        else:
+            assert(idx == 1)
+            all_labels = self.labels[..., self.inner_dp.image_range]
+            return all_labels
+class ImageFeatureMLCDataWarper(CroppedImageDataWarper):
+    def __init__(self, data_dic, train, data_range, params):
+        CroppedImageDataWarper.__init__(self, data_dic,train, data_range, params)
+        self.image_features = self.inner_dp.batch_meta['image_features']
+        self.labels = self.inner_dp.batch_meta['labels']
+        assert(self.image_features.shape[-1] == self.labels.shape[-1])
+        self.inner_dp.data_dic = dict()
+        self.use_buffer = True
+    def get_batch(self, batch_num):
+        dp = self.inner_dp
+        inner_batch_num = dp.curr_batchnum
+        if (dp.test and (not dp.shuffle_data)) or dp.fix_num_batch:
+            # test data doesn't need to circle 
+            end_num = min(inner_batch_num + dp.batch_size, dp.num_image)
+            cur_batch_indexes = dp.shuffled_image_range[inner_batch_num:end_num]
+        else:
+            cur_batch_indexes = dp.shuffled_image_range[ map(lambda x: x if x < dp.num_image else x - dp.num_image ,range(inner_batch_num, inner_batch_num + dp.batch_size))]
+        dp.data_dic['cur_batch_indexes'] = cur_batch_indexes
+        return dp.data_dic
+    def get_next_batch(self):
+        epoch, batchnum = self.epoch, self.batchnum
+        if batchnum in self.data_buffer and self.use_buffer:
+            alldata = self.data_buffer[batchnum]
+            self.cur_batch_indexes = self.data_indexes[batchnum]
+        else:
+            data_dic = self.get_batch(batchnum)
+            cur_batch_indexes = data_dic['cur_batch_indexes']
+            cur_img_features = self.image_features[..., cur_batch_indexes]
+            labels = self.labels[..., cur_batch_indexes]
+            alldata = [cur_img_features, labels]
+            if self.use_buffer:
+                self.data_indexes[batchnum] = cur_batch_indexes
+                self.data_buffer[batchnum] = alldata
+                self.cur_batch_indexes = cur_batch_indexes
+        # Important to move the inner dp here
+        self.inner_dp.advance_batch()
+        self.cur_offset_r = None
+        self.cur_offset_c = None
+        self.advance_batch()
+        return epoch, batchnum, alldata
+    def get_all_data_at(self, idx=0):
+        if idx == 0:
+            return self.images_feature[..., self.inner_dp.image_range]
+        elif idx == 1:
+            return self.labels[..., self.inner_dp.image_range]
+        else:
+            raise Exception('Invalid data idx {}'.format(idx))
+class ImageFeatureMLCRandDataWarper(ImageFeatureMLCDataWarper):
+    def get_rand_label(self, ndata):
+        dp = self.inner_dp
+        ntot = dp.shuffled_image_range.size
+        indexes = np.random.random_integers(0, ntot - 1, [ndata])
+        indexes = dp.shuffled_image_range[indexes]
+        return self.labels[..., indexes].reshape((-1,ndata),order='F')
+    def get_next_batch(self):
+        epoch, batchnum, alldata = ImageFeatureMLCDataWarper.get_next_batch(self)
+        ndata = alldata[0].shape[-1]
+        randlabel = self.get_rand_label(ndata)
+        return epoch, batchnum, alldata + [randlabel]
+            
+dp_dic = {'fake':FakeDataProvider, 'mem': MemoryDataProvider,
+          'croppedjt':CroppedDHMLPEJointDataWarper,
+          'croppedjtcompact':CroppedDHMLPEJointCompactDataWarper,
+          'croppedjtrand':CroppedDHMLPEJointRandDataWarper,
+          'croppedjtocc':CroppedDHMLPEJointOccDataWarper,
+          'croppedjtslow':CroppedDHMLPEJointSlowDataWarper,
+          'croppedimgcls':CroppedImageClassificationDataWarper,
+          'croppedimgmlc':CroppedImageMLCDataWarper,
+          'imgfeatmlc':ImageFeatureMLCDataWarper,
+          'imgfeatmlcrand':ImageFeatureMLCRandDataWarper
+}

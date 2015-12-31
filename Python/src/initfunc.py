@@ -16,6 +16,7 @@ def constant(name, sp, params):
     if type(sp[0]) is list or type(sp[0]) is tuple:
         return [np.ones(p)* s for p in sp]
     return np.ones(sp) * s
+
 def tryint(s):
     try:
         return int(s)
@@ -26,11 +27,11 @@ def alphanum_key(s):
 def get_layers(model):
     return model['net_dic'].items()[0][1]['layers']
 def get_w_fconv2(name, sp_list, params):
-    return get_wb_from_convnet2_checkpoint(name, sp_list, params)
-def get_b_fconv2(name, sp, params):
-    res = get_wb_from_convnet2_checkpoint(name, sp, params)
-    return res.reshape(sp, order='F')
-def get_wb_from_convnet2_checkpoint(name, sp, params):
+    return get_wb_from_convnet2_checkpoint(name, sp_list, params, 'weights')
+def get_b_fconv2(name, sp_list, params):
+    res = get_wb_from_convnet2_checkpoint(name, sp_list, params, 'biases')
+    return [ res[0].reshape(sp_list[0], order='F')]
+def get_wb_from_convnet2_checkpoint(name, sp, params, item_type):
     """
     params = [check_point_path, layer_name, ]
     """
@@ -41,7 +42,7 @@ def get_wb_from_convnet2_checkpoint(name, sp, params):
     saved = mio.unpickle(filepath)
     model_state = saved['model_state']
     layer = model_state['layers'][layer_name]
-    if type(sp[0]) is list or type(sp[0]) is tuple:
+    if item_type == 'weights':
         # weights
         n_w = len(sp)
         print '    init from convnet {}--------'.format(checkpath)
@@ -50,7 +51,7 @@ def get_wb_from_convnet2_checkpoint(name, sp, params):
         print '--------------\n---------\n'
         return [layer['weights'][k] for k in idx_list]  
     else:
-        return layer['biases']
+        return [layer['biases']]
 def gwfp(name, sp_list, params):
     """
     get weights from saved model
@@ -77,7 +78,7 @@ def gbfp(name, sp, params):
     model =Solver.get_saved_model(model_path)
     layers = get_layers(model)
     lay = layers[layer_name][2]
-    return lay['biases'][0]
+    return lay['biases']
 def gwns(name, sp_list, params):
     """
     get weights for combining norm and scale layer
@@ -125,4 +126,52 @@ def gbns(name,sp, params):
         epsilon = 1e-6
     u = stat['layers'][norm_name]['u'].flatten()
     var = stat['layers'][norm_name]['var'].flatten()
-    return b - W * u / (np.sqrt(var + epsilon))
+    return [b - W * u / (np.sqrt(var + epsilon))]
+
+def get_fans(shape):
+    # strange definition
+    fan_in = shape[0] if len(shape) == 2 else np.prod(shape[1:])
+    fan_out = shape[1] if len(shape) == 2 else shape[0]
+    return fan_in, fan_out
+def init_uniform(name, shape, params):
+    scale = float(params[0])
+    print 'Shape = {} scale = {}'.format(shape,scale)
+    return [uniform(sp, scale) for sp in shape]
+
+def uniform(shape, scale=0.05):
+    return np.random.uniform(low=-scale, high=scale, size=shape)
+def glorot_uniform(shape):
+    fan_in, fan_out = get_fans(shape)
+    s = np.sqrt(2. / (fan_in + fan_out))
+    return uniform(shape, s)
+def orthogonal(shape, scale=1.1):
+    flat_shape = (shape[0], np.prod(shape[1:]))
+    a = np.random.normal(0.0, 1.0, flat_shape)
+    u, _, v = np.linalg.svd(a, full_matrices=False)
+    q = u if u.shape == flat_shape else v # pick the one with the correct shape
+    q = q.reshape(shape)
+    return scale * q[:shape[0], :shape[1]]
+def get_init_func(method_name):
+    all_func_dic = {'uniform':uniform, 'glorot_uniform':glorot_uniform,
+                    'orthogonal':orthogonal}
+    return all_func_dic[method_name]
+def init_orthogonal(name, sp_list, params=None):
+    for sp in sp_list:
+        assert(len(sp) == 2)
+    scale = float(params[0])
+    return [orthogonal(sp, scale) for sp in sp_list]
+def init_LSTM_W(name, sp_list, params=None):
+    init_method, inner_init_method = 'glorot_uniform', 'orthogonal'
+    if params and len(params):
+        init_method = params[0]
+        if len(params) > 1:
+            inner_init_method = params[1]
+    init_f = get_init_func(init_method)
+    inner_init_f = get_init_func(inner_init_method)
+    assert(len(sp_list) == 8)
+    return [ init_f(sp) if i % 2 == 0 else inner_init_f(sp) for i, sp in enumerate(sp_list) ]
+def init_LSTM_B(name, sp_list, params=None):
+    return [np.zeros(sp, dtype=theano.config.floatX) for sp in sp_list]
+            
+
+    

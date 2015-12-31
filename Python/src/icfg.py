@@ -52,7 +52,7 @@ class IConfigParser(cfg.SafeConfigParser):
         try:
             return [f(x.strip()) for x in v.split(',')]
         except:
-            raise IconfigParserError("Section '%s': parameter '%s' must be ','-delimited list of %s" % (section, option, typestr))
+            raise IConfigParserError("Section '%s': parameter '%s' must be ','-delimited list of %s" % (section, option, typestr))
 
     def safe_get_tuple_list(self, section, option, f=str, typestr='strings', default=None):
         v = self.safe_get(section, option, default=default)
